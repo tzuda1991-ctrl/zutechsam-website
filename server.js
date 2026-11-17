@@ -1,10 +1,19 @@
 import http from 'node:http';
-import {readFile} from 'node:fs/promises';
+import {readFile,mkdir,open,stat} from 'node:fs/promises';
+import {createWriteStream} from 'node:fs';
+import {pipeline} from 'node:stream/promises';
+import pathModule from 'node:path';
 import {randomBytes,scryptSync,timingSafeEqual} from 'node:crypto';
 import pg from 'pg';
 const port=Number(process.env.PORT||3000),admin=process.env.SITE_MODE==='admin';
 const pool=process.env.DATABASE_URL?new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false}}):null;
 const sessions=new Map();
+const uploadDir=process.env.UPLOAD_DIR||'/data/uploads';
+const mediaOrigin=(process.env.MEDIA_BASE_URL||'').replace(/\/$/,'');
+const mediaTypes={'.apk':'application/vnd.android.package-archive','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
+const mediaLimit=100*1024*1024;
+async function saveUpload(req,ext){await mkdir(uploadDir,{recursive:true});const name=randomBytes(20).toString('hex')+ext;const dest=pathModule.join(uploadDir,name);const out=createWriteStream(dest,{flags:'wx',mode:0o600});let size=0;try{for await(const chunk of req){size+=chunk.length;if(size>mediaLimit)throw Error('Upload exceeds 100 MB');if(!out.write(chunk))await new Promise(resolve=>out.once('drain',resolve))}await new Promise((resolve,reject)=>out.end(err=>err?reject(err):resolve()));if(size<16)throw Error('File is empty or invalid');const file=await open(dest,'r');const buf=Buffer.alloc(12);await file.read(buf,0,12,0);await file.close();const isPng=buf.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));const isJpg=buf[0]===255&&buf[1]===216&&buf[2]===255;const isWebp=buf.toString('ascii',0,4)==='RIFF'&&buf.toString('ascii',8,12)==='WEBP';const isApk=buf.toString('hex',0,4)==='504b0304';if(!((ext==='.png'&&isPng)||(['.jpg','.jpeg'].includes(ext)&&isJpg)||(ext==='.webp'&&isWebp)||(ext==='.apk'&&isApk)))throw Error('File signature does not match type');return name}catch(e){out.destroy();const {unlink}=await import('node:fs/promises');await unlink(dest).catch(()=>{});throw e}}
+
 const html=await readFile(new URL(admin?'./admin.html':'./index.html',import.meta.url));
 const send=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))};
 const clean=s=>String(s||'').trim();
@@ -33,6 +42,9 @@ http.createServer(async(req,res)=>{try{
 const path=new URL(req.url,'http://localhost').pathname;
 if(path==='/health')return send(res,200,{ok:true,mode:admin?'admin':'public',database:!!pool});
 if(path==='/'||path==='/index.html'){res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-security-policy':"default-src 'self' https: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'",'x-content-type-options':'nosniff'});return res.end(html)}
+if(/^\/media\/[a-f0-9]{40}\.(apk|png|jpg|jpeg|webp)$/.test(path)&&req.method==='GET'){
+if(!admin){if(!mediaOrigin)return send(res,503,{error:'MEDIA_BASE_URL is not configured'});res.writeHead(302,{location:mediaOrigin+path,'cache-control':'public, max-age=300'});return res.end()}
+try{const name=pathModule.basename(path),p=pathModule.join(uploadDir,name),info=await stat(p);res.writeHead(200,{'content-type':mediaTypes[pathModule.extname(name)],'content-length':info.size,'x-content-type-options':'nosniff','content-disposition':path.endsWith('.apk')?'attachment; filename="zutechsam-app.apk"':'inline','cache-control':'public, max-age=31536000, immutable'});const stream=(await import('node:fs')).createReadStream(p);return stream.pipe(res)}catch{return send(res,404,{error:'File not found'})}}
 if(!pool)return send(res,503,{error:'Database is not configured. Add DATABASE_URL on Railway.'});
 if(path==='/api/projects'&&req.method==='GET'){const q=await pool.query('SELECT * FROM projects WHERE published=true ORDER BY featured DESC,created_at DESC LIMIT 500');return send(res,200,q.rows)}
 if(path==='/api/enquiries'&&req.method==='POST'&&!admin){const b=await body(req);if(!clean(b.name)||!/^\S+@\S+\.\S+$/.test(clean(b.email))||!clean(b.message)||clean(b.message).length>5000)return send(res,400,{error:'Please provide valid name, email and message'});await pool.query('INSERT INTO enquiries(name,email,service,message) VALUES($1,$2,$3,$4)',[clean(b.name).slice(0,120),clean(b.email).slice(0,200),clean(b.service).slice(0,100),clean(b.message)]);return send(res,201,{ok:true})}
@@ -40,6 +52,11 @@ if(!admin)return send(res,404,{error:'Not found'});
 if(path==='/api/login'&&req.method==='POST'){const b=await body(req);const q=await pool.query('SELECT * FROM admins WHERE username=$1',[clean(b.username)]);const a=q.rows[0];if(!a||!timingSafeEqual(Buffer.from(hash(String(b.password||''),a.salt),'hex'),Buffer.from(a.password_hash,'hex')))return send(res,401,{error:'Invalid credentials'});const t=randomBytes(32).toString('hex');sessions.set(t,{expires:Date.now()+8*3600000});return send(res,200,{token:t})}
 if(path==='/api/logout'&&req.method==='POST'){sessions.delete(token(req));return send(res,200,{ok:true})}
 if(!auth(req))return send(res,401,{error:'Login required'});
+if(path==='/api/admin/upload'&&req.method==='POST'){
+const ext=pathModule.extname(String(req.headers['x-filename']||'').toLowerCase());if(!mediaTypes[ext])return send(res,400,{error:'Only APK, PNG, JPG and WebP are allowed'});
+if(!req.headers['content-length']||Number(req.headers['content-length'])>mediaLimit)return send(res,413,{error:'File size must be 100 MB or less'});
+try{const name=await saveUpload(req,ext);return send(res,201,{ok:true,url:'/media/'+name})}catch(e){return send(res,400,{error:e.message})}}
+
 if(path==='/api/admin/projects'&&req.method==='GET'){const q=await pool.query('SELECT * FROM projects ORDER BY created_at DESC LIMIT 500');return send(res,200,q.rows)}
 if(path==='/api/admin/enquiries'&&req.method==='GET'){const q=await pool.query('SELECT * FROM enquiries ORDER BY created_at DESC LIMIT 500');return send(res,200,q.rows)}
 if(path==='/api/admin/projects'&&req.method==='POST'||/^\/api\/admin\/projects\/\d+$/.test(path)&&['PUT','DELETE'].includes(req.method)){
