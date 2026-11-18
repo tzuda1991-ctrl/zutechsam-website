@@ -10,7 +10,7 @@ export const releaseSchema=`CREATE TABLE IF NOT EXISTS project_releases(
   ALTER TABLE project_releases ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1;
   CREATE UNIQUE INDEX IF NOT EXISTS one_latest_release ON project_releases(project_id) WHERE is_latest`;
 
-export const publicProjects=`SELECT p.*,COALESCE(r.version,p.version) AS version,
+export const publicProjects=`SELECT p.*,r.id AS latest_release_id,COALESCE(r.version,p.version) AS version,
   COALESCE(r.url,p.apk_url) AS apk_url,COALESCE(r.notes,p.release_notes) AS release_notes
   FROM projects p LEFT JOIN project_releases r ON r.project_id=p.id AND r.is_latest`;
 const bad=(status,message)=>Object.assign(Error(message),{status});
