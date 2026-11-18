@@ -35,8 +35,16 @@ followOldLink();window.addEventListener('hashchange',followOldLink);
 render();
 fetch('/api/projects').then(r=>{if(!r.ok)throw Error();return r.json();}).then(rows=>{
   projects=rows;loaded=true;render();
-  const lead=projects.find(p=>p.featured)||projects[0];
-  if(lead){$('spotLink').href='/projects/'+lead.id;$('spotTitle').textContent=lead.title;}
+  const lead=projects.find(p=>p.featured&&p.apk_url)||projects.find(p=>p.apk_url)||projects.find(p=>p.featured)||projects[0];
+  if(lead){
+    const page='/projects/'+lead.id;
+    $('spotTitle').textContent=lead.title;
+    $('spotLink').href=page;
+    $('spotLabel').textContent=lead.apk_url?'Android release'+(lead.version?' · v'+String(lead.version).replace(/^v/i,''):''):'Featured project';
+    $('spotAction').href=page+(lead.apk_url?'#downloads':'');
+    $('spotAction').firstChild.textContent=lead.apk_url?'View download ':'View project ';
+    $('spotlight').hidden=false;
+  }
 }).catch(()=>{$('projectGrid').textContent='The project collection could not load. Refresh to try again.';});
 document.getElementById('enquiry').onsubmit=async e=>{e.preventDefault();const f=e.target,s=document.getElementById('formStatus');s.textContent='Sending...';try{const r=await fetch('/api/enquiries',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(f)))});const data=await r.json();if(!r.ok)throw Error(data.error||'Unable to send');s.textContent='Thank you! Your enquiry has been received.';f.reset()}catch(err){s.textContent=err.message+' You can also use the contact email.'}};
 
