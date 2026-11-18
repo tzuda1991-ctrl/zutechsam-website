@@ -45,3 +45,24 @@ dialog{border:1px solid #e0e6ef;border-radius:16px;box-shadow:0 25px 90px #101f3
  #metrics{gap:9px}
 }
 @media(max-width:480px){#metrics{grid-template-columns:1fr 1fr}.metric strong{font-size:29px}.grid{gap:12px}.panel{padding:15px}}
+
+/* Option D · Tech company workspace */
+:root{--admin-ink:#151d27;--admin-blue:#1760e8;--admin-line:#e1e4e8;--admin-paper:#f4f5f6}
+body{background:var(--admin-paper);color:var(--admin-ink);font-family:Inter,Arial,sans-serif}
+aside{background:#fff;color:#18212a;border-right:1px solid #e0e3e6;box-shadow:4px 0 20px #182b4108}
+.brand{font-size:20px;letter-spacing:-.055em}.brand span{color:#1b59d0}.brand small{color:#69717b;text-transform:uppercase;font-size:.68rem}
+nav a{color:#48525e;border-radius:6px;font-size:.9rem}nav a.active{background:#eff2f7;color:#1a4fb8;box-shadow:inset 3px 0 #b7e627}
+button{background:#1d5de0;border-radius:6px;box-shadow:none}button.alt{background:#eef1f4;color:#323f4f;border:1px solid #e1e4e8}button.danger{background:#fff0ef;border:1px solid #f2dedc;color:#a3433d}
+input,select,textarea{border:1px solid #d6dbe1;border-radius:6px;background:#fff}
+input:focus,textarea:focus,select:focus{outline:3px solid #dce6ff;border-color:#7d9ce5}
+.panel,#loginPanel,.metric{background:white;border:1px solid #e1e4e8;border-radius:8px;box-shadow:0 6px 24px -24px #101b2b}
+h1{letter-spacing:-.058em}h2{letter-spacing:-.025em}
+.top{border-color:#e1e4e8}.top span:last-child{color:#3264b6}
+.mast{background:linear-gradient(90deg,#151d27f2 5%,#151d27d9 55%,#151d2740),url(/agency.webp) center/cover no-repeat;color:white;border:1px solid #dee2e7;border-radius:8px}
+.mast small{color:#daf24a}.mast a{background:#dfff48;color:#17210d;border-radius:5px}
+.metric:first-child{background:#17202c;color:white;border-color:#17202c}.metric{border-top:3px solid #bedc32}.metric strong{font-family:Inter,Arial,sans-serif;letter-spacing:-.06em}
+.week i{background:#2866df;border-radius:3px}.row{border-color:#edf0f2}.thumb{border-radius:6px}
+.uploadbox{background:#f5f6f7;border:1px solid #e5e7ea;border-radius:7px}
+#loginPanel{border-radius:9px}.login-art{background-image:url(/agency.webp);border-radius:6px}
+#loginPanel button{width:100%}dialog{border:1px solid #e0e3e7;border-radius:10px;box-shadow:0 25px 90px #131c2b38}
+@media(max-width:760px){aside{position:sticky;top:0;z-index:9;background:#fff;border-bottom:1px solid #e0e3e6;box-shadow:0 5px 14px #1723320b}.mast{background-position:center}.week{gap:4px}}
