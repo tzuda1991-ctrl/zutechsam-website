@@ -12,7 +12,7 @@ import pg from 'pg';
 const port=Number(process.env.PORT||3000),admin=process.env.SITE_MODE==='admin';
 const pool=process.env.DATABASE_URL?new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false}}):null;
 const sessions=new Map();
-const assets = new Map(await Promise.all(['icons.svg','brand.svg','public.css','admin.css','admin.js','public.js','release-admin.js','center-admin.js','center-public.js','studio.webp','AI.webp','Games.webp','Websites.webp'].map(async name => ['/'+name,await readFile(new URL('./'+name,import.meta.url))])));
+const assets = new Map(await Promise.all(['icons.svg','brand.svg','public.css','admin.css','admin.js','public.js','release-admin.js','center-admin.js','center-public.js','studio.webp','campaign.webp','AI.webp','Games.webp','Websites.webp'].map(async name => ['/'+name,await readFile(new URL('./'+name,import.meta.url))])));
 import {directory as uploadDir, apkMB, startUpload, writePart, cleanStaging} from './uploads.js';
 if(admin) setInterval(()=>cleanStaging().catch(console.error),3600000).unref();
 const mediaOrigin=(process.env.MEDIA_BASE_URL||'').replace(/\/$/,'');
