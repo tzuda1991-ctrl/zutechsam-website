@@ -84,3 +84,67 @@ header{background:white}.nav{height:64px}.logo{letter-spacing:-.05em}.pill,.cta{
  .agency .section h2,.agency .collection-head h2{font-size:2rem}
 }
 @media(max-width:370px){.agency .project-card{grid-template-columns:82px minmax(0,1fr);gap:9px}.agency #services .grid{grid-template-columns:1fr}.agency .navlinks a[href="#projects"]{display:none}}
+
+/* Option D · Tech Company */
+.agency{--paper:#f5f6f7;--white:#fff;--ink:#111820;--mute:#4e5966;--line:#e0e3e7;--wine:#1760e8;--orange:#214fb0;color:var(--ink);background:var(--paper);font-family:Inter,Arial,sans-serif}
+.agency header{position:sticky;top:0;z-index:10;background:#ffffffed;backdrop-filter:blur(12px);border-bottom:1px solid #e7e9eb}
+.agency .logo{font-size:1.1rem;letter-spacing:-.055em}.agency .brand-mark{width:35px;height:35px}
+.agency .pill,.agency .cta,.agency .demo-action{background:#1760e8;color:white;border-radius:7px;box-shadow:none}.agency .pill:hover,.agency .cta:hover,.agency .demo-action:hover{background:#084abd}
+.agency .agency-hero{padding-block:48px 40px;grid-template-columns:.91fr 1.09fr;gap:4%;min-height:415px}
+.agency .discipline{font-size:.71rem;letter-spacing:.16em;text-transform:uppercase;color:#586273}.agency .discipline:before{background:#b5e820}
+.agency .agency-pitch h1{color:#12181e;font-size:clamp(2.8rem,5.2vw,5.05rem);line-height:1.02;letter-spacing:-.067em;margin:18px 0}
+.agency .agency-pitch h1 span{color:#1760e8;background:linear-gradient(transparent 68%,#dfff48 68%);padding-right:6px}
+.agency .agency-pitch .introduction{color:#53606e;font-size:1rem;line-height:1.65;max-width:44ch}
+.agency .agency-actions{gap:19px}.agency .agency-actions .talk{border-bottom:1px solid #aeb7c3}
+.agency .agency-visual{background:#e9ecef;border:1px solid #e0e3e7;border-radius:4px;box-shadow:0 16px 44px -35px #122033}
+.agency .agency-visual img{aspect-ratio:1.5;object-fit:cover}
+.agency .projects{background:#fff;border-top:1px solid #eaeced;padding-block:42px 60px}
+.agency .collection-head h2,.agency .head h2{font-size:clamp(1.9rem,3.3vw,3rem);line-height:1.12;letter-spacing:-.05em}
+.agency .collection-head h2:after{height:3px;background:#b9e822;margin-top:9px}
+.agency .filters{gap:7px;margin-block:20px 12px}
+.agency .filter,.agency #savedOnly,.agency .toolbar select,.agency .find{background:white;border:1px solid #dce0e4;border-radius:6px}
+.agency .filter{padding:8px 13px}.agency .filter.active,.agency #savedOnly[aria-pressed=true]{background:#171d24;color:white;border-color:#171d24}
+.agency .refine summary{width:fit-content;padding:7px 10px;border:1px solid #dce0e4;border-radius:6px;background:white;color:#384454;font-size:.85rem}
+.agency #projectGrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.agency .project-card{position:relative;display:flex;flex-direction:column;align-items:stretch;gap:0;padding:0;background:white;border:1px solid #e3e6e8;border-radius:8px;box-shadow:0 8px 28px -27px #111820;transition:transform .2s,box-shadow .2s}
+.agency .project-card:hover{transform:translateY(-3px);box-shadow:0 16px 32px -26px #111820}
+.agency .project-card .art{aspect-ratio:1.8;border-radius:0;object-fit:cover}.agency .project-body{padding:16px;gap:4px}
+.agency .project-body .tag{background:#f0f3f7;color:#506075;border-radius:4px;font-size:.64rem;letter-spacing:.07em}
+.agency .project-body h3{font:680 1.03rem/1.3 Inter,Arial,sans-serif;color:#141c26;letter-spacing:-.025em;margin:2px 0}
+.agency .project-body p{font-size:.84rem;line-height:1.5;margin-bottom:13px}
+.agency .work-actions{gap:12px;margin-top:auto}.agency .demo-action{font-size:.78rem;padding:8px 10px;border-radius:5px}
+.agency .work-actions .textlink{font-size:.78rem;border:0;margin:0;color:#1755c1}
+.agency .fav{top:9px;right:9px;width:34px;height:34px;border-radius:6px}
+.agency #services{background:#f2f4f6;padding-block:56px}.agency #services .head{margin-bottom:23px}
+.agency #services .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.agency #services .card{display:grid;grid-template-columns:42px 1fr;column-gap:12px;align-items:center;background:white;border:1px solid #e4e7eb;border-radius:7px;padding:16px}
+.agency #services .icon{grid-row:span 2;display:grid;place-items:center;width:39px;height:39px;background:#f0f3f7;border-radius:6px;color:#1b58d1}
+.agency #services .icon svg{width:21px;height:21px}.agency #services h3{font-size:.91rem;margin:0}.agency #services p{grid-column:2;font-size:.76rem;line-height:1.35}
+.agency .process{background:#fff;padding-block:55px}.agency .process .head{max-width:730px}.agency .process .head h2{margin:10px 0}
+.agency #contact{padding-block:45px}.agency .contact{background:#141c26;color:white;border-radius:6px}
+.agency .contact .kicker{color:#d7f05d}.agency .contact p{color:#c6ced8}.agency .form .cta{background:#dfff48;color:#15200e;border-radius:6px}
+.agency footer{background:white;border-top:1px solid #e2e5e8}
+@media(max-width:800px){.agency #projectGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){
+ .agency .nav{height:56px}.agency .logo{font-size:1rem}.agency .brand-mark{width:31px;height:31px}
+ .agency .navlinks{gap:8px}.agency .navlinks a[href="#services"]{display:none}.agency .navlinks .pill{padding:8px 10px;font-size:.78rem}
+ .agency .agency-hero{grid-template-columns:1fr;padding-block:25px 20px;gap:15px;min-height:unset}
+ .agency .discipline{font-size:.64rem}.agency .agency-pitch h1{font-size:clamp(2.5rem,9.4vw,3.45rem);margin:9px 0}
+ .agency .agency-pitch .introduction{font-size:.89rem;line-height:1.48}.agency .agency-actions{margin-top:12px;gap:15px;font-size:.83rem}
+ .agency .agency-actions .cta{padding:10px 13px}.agency .agency-visual{border-radius:5px}.agency .agency-visual img{aspect-ratio:1.95}
+ .agency .projects{padding-block:25px 35px}.agency .collection-head h2,.agency .head h2{font-size:1.72rem}
+ .agency .filters{flex-wrap:nowrap;overflow:auto;padding-bottom:3px}.agency .filter{flex:none;font-size:.78rem;padding:7px 10px}
+ .agency #projectGrid{grid-template-columns:1fr;gap:11px}
+ .agency .project-card{display:grid;grid-template-columns:84px minmax(0,1fr);align-items:center;gap:10px;padding:9px;border-radius:7px}
+ .agency .project-card>a{border-radius:4px;overflow:hidden}.agency .project-card .art{width:84px;height:72px;aspect-ratio:auto;border-radius:3px}
+ .agency .project-body{padding:0 23px 0 0;min-width:0;gap:2px}.agency .project-body h3{font-size:.93rem;line-height:1.22}
+ .agency .project-body p{font-size:.74rem;line-height:1.32;margin-bottom:6px}.agency .project-body .tag{font-size:.58rem}
+ .agency .work-actions{gap:9px}.agency .demo-action{font-size:.69rem;padding:6px 8px}.agency .work-actions .textlink{font-size:.7rem}
+ .agency .fav{width:28px;height:28px;top:7px;right:6px}
+ .agency #services{padding-block:36px}.agency #services .grid{grid-template-columns:1fr 1fr;gap:8px}
+ .agency #services .card{grid-template-columns:32px 1fr;column-gap:8px;padding:11px}
+ .agency #services .icon{width:31px;height:31px}.agency #services .icon svg{width:17px;height:17px}
+ .agency #services h3{font-size:.79rem}.agency #services p{font-size:.68rem}
+ .agency .process{padding-block:37px}.agency #contact{padding-block:30px}.agency .contact{border-radius:5px}
+}
+@media(max-width:370px){.agency .navlinks a[href="#projects"]{display:none}.agency #services .grid{grid-template-columns:1fr}}
