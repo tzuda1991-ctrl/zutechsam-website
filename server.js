@@ -12,7 +12,7 @@ import pg from 'pg';
 const port=Number(process.env.PORT||3000),admin=process.env.SITE_MODE==='admin';
 const pool=process.env.DATABASE_URL?new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false}}):null;
 const sessions=new Map();
-const assets = new Map(await Promise.all(['public.css','admin.css','admin.js','public.js','release-admin.js','center-admin.js','center-public.js','studio.webp','AI.webp','Games.webp','Websites.webp'].map(async name => ['/'+name,await readFile(new URL('./'+name,import.meta.url))])));
+const assets = new Map(await Promise.all(['icons.svg','brand.svg','public.css','admin.css','admin.js','public.js','release-admin.js','center-admin.js','center-public.js','studio.webp','AI.webp','Games.webp','Websites.webp'].map(async name => ['/'+name,await readFile(new URL('./'+name,import.meta.url))])));
 import {directory as uploadDir, apkMB, startUpload, writePart, cleanStaging} from './uploads.js';
 if(admin) setInterval(()=>cleanStaging().catch(console.error),3600000).unref();
 const mediaOrigin=(process.env.MEDIA_BASE_URL||'').replace(/\/$/,'');
@@ -47,7 +47,7 @@ const auth=req=>{const s=sessions.get(token(req));if(!s||s.expires<Date.now())re
 const urlOk=s=>{if(!s)return true;try{return s.length<1500 && new URL(s).protocol==='https:';}catch{return false;}};
 http.createServer(async(req,res)=>{try{
 const path=new URL(req.url,'http://localhost').pathname;
-if(assets.has(path)){res.writeHead(200,{'content-type':path.endsWith('.webp')?'image/webp':path.endsWith('.css')?'text/css':'text/javascript'});return res.end(assets.get(path))}
+if(assets.has(path)){res.writeHead(200,{'content-type':path.endsWith('.svg')?'image/svg+xml':path.endsWith('.webp')?'image/webp':path.endsWith('.css')?'text/css':'text/javascript'});return res.end(assets.get(path))}
 if(path==='/health')return send(res,200,{ok:true,mode:admin?'admin':'public',database:!!pool});
 if(path==='/'||path==='/index.html'){res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-security-policy':"default-src 'self' https: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'",'x-content-type-options':'nosniff'});return res.end(html)}
 if(/^\/media\/[a-f0-9]{40}\.(apk|aab|zip|pdf|png|jpg|jpeg|webp)$/.test(path)&&['GET','HEAD'].includes(req.method)){
