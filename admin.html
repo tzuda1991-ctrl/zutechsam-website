@@ -1,1 +1,331 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ZUTECHSAM · Studio desk</title><link rel="icon" href="/brand.svg"><link rel="stylesheet" href="/admin.css"></head><body><main id="loginPanel"><div class="brand"><img src="/brand.svg" width="36" height="36" alt="">ZU<span>TECHSAM</span></div><div class="login-art" aria-hidden="true"></div><h1>Studio sign in</h1><form id="login"><label>Username<input name="username" required autocomplete="username"></label><label>Password<input name="password" type="password" required autocomplete="current-password"></label><button>Sign in →</button><p id="loginMsg" role="status"></p></form></main><div id="desk" hidden><aside><div class="brand"><img src="/brand.svg" width="36" height="36" alt="">ZU<span>TECHSAM</span><small>Studio desk</small></div><nav><a href="#overview">Overview</a><a href="#projects">Project library</a><a href="#editor" id="newProject">Add project</a><a href="#enquiries">Enquiry inbox</a><a href="#settings">Website settings</a></nav><button class="alt" id="centerButton">Release activity &amp; reports</button><button class="alt" id="storageButton">File manager</button><button id="logout" class="alt">Sign out</button></aside><main><div class="top"><span>Studio workspace</span><span>● Admin</span></div><p id="notice" role="status"></p><section id="overview"><div class="mast"><div><small>PRODUCTION WORKSPACE</small><h1>Studio overview.</h1><a href="#editor" id="quickNew">Create project ↗</a></div></div><div id="metrics"></div><div class="panel"><h2>Enquiries this week</h2><div id="week" class="week"></div></div><div class="panel"><h2>Recent projects</h2><div id="recent"></div><a href="#projects">Open project library →</a></div></section><section id="projects"><h1>Project library</h1><div class="tools"><input id="search" placeholder="Search projects" aria-label="Search projects"><select id="pub" aria-label="Publication status"><option>All projects</option><option>Published</option><option>Draft</option><option>Featured</option></select></div><div id="list" class="panel"></div></section><section id="editor"><h1 id="editorTitle">Add project</h1><div class="panel"><div id="editorReleases" hidden><h3>Published APK releases</h3><div id="editorReleaseList"></div></div><form id="projectForm"><div class="grid"><label>Project Title<input name="title" required maxlength="150"></label><label>Category<select name="category"><option>Apps</option><option>Games</option><option>AI</option><option>Websites</option><option>Software</option></select></label></div><label>Release version<input name="version" maxlength="60" placeholder="e.g. 1.2.0"></label><label>Short Summary<input name="summary" maxlength="400"></label><label>Release notes<textarea name="release_notes" maxlength="4000" placeholder="What changed in this release?"></textarea></label><label>Description<textarea name="description"></textarea></label><div class="grid"><label>Image HTTPS URL<input name="image_url" type="url" placeholder="https://"></label><label>Live Demo HTTPS URL<input name="demo_url" type="url" placeholder="https://"></label><label>APK HTTPS URL<input name="apk_url" type="url" placeholder="https://"></label><label>Video HTTPS URL<input name="video_url" type="url" placeholder="https://"></label></div><div class="uploadbox"><h3>Project files</h3><p class="small">Images: PNG, JPG, WebP, up to 100 MiB. APK and project files: up to <span id="apkLimit">…</span> MiB per file, subject to available storage. Choosing a file starts its upload. Save a published project to make its files visible.</p><div class="grid"><label>Cover image<input id="coverFile" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"><button type="button" class="alt" data-upload="coverFile" data-target="image_url">Upload Image</button></label><label>Android APK<input id="apkFile" type="file" ><button type="button" class="alt" data-upload="apkFile" data-target="apk_url">Upload APK</button></label></div><label>Screenshot gallery (up to six HTTPS links, one per line)<textarea name="screenshots" rows="3"></textarea></label><label>Add a screenshot<input id="screenFile" type="file" accept=".jpg,.jpeg,.png,.webp"></label><button type="button" class="alt" data-upload="screenFile" data-target="screenshots">Upload screenshot</button><h3>Downloadable project files</h3><p class="small">Attach ZIP archives, Android App Bundles (.aab) and PDFs. Use a hosted HTTPS link for larger releases.</p><input id="extraFile" type="file" aria-label="Choose a project file"><button class="alt" type="button" data-upload="extraFile" data-target="attachments">Upload project file</button><div class="grid"><label>Download label<input id="linkName" maxlength="240"></label><label>External download URL<input id="linkUrl" type="url" placeholder="https://"></label></div><button id="addLink" type="button" class="alt">Attach link</button><div id="attachedFiles"></div><progress id="progress" hidden max="100"></progress><p id="uploadStatus" role="status" class="small"></p></div><label><input type="checkbox" name="featured" style="width:auto"> Featured project</label><label style="margin-left:20px"><input type="checkbox" name="published" checked style="width:auto"> Published</label><div><button type="button" class="alt" id="previewRelease">Preview release</button><button>Save project &amp; files</button><button type="button" class="alt" id="cancel">Clear</button></div><p class="message" id="projectMsg"></p></form></div></section><section id="enquiries"><h1>Enquiry inbox</h1><div class="tools"><input id="findMail" placeholder="Search enquiries" aria-label="Search enquiries"><select id="mailStatus" aria-label="Enquiry status"><option>All enquiries</option><option>new</option><option>contacted</option><option>closed</option></select></div><div id="inbox" class="panel"></div></section><section id="settings"><h1>Website settings</h1><form class="panel" id="settingsForm"><label>Homepage headline<input maxlength="90" name="headline" placeholder="Software you can try for yourself."></label><label>Studio introduction<textarea name="intro" maxlength="360"></textarea></label><label>Contact email<input name="email" type="email" placeholder="zutechsam@gmail.com"></label><button>Save website settings</button></form></section></main></div><dialog id="releaseDialog"><button id="closePreview" type="button" class="alt">Close</button><div id="releasePreview"></div></dialog><dialog id="versionDesk" aria-labelledby="versionTitle"><button class="alt" type="button" id="exitVersion">Close</button><h2 id="versionTitle">Add release</h2><div id="versionList"></div><button type="button" class="alt" id="newVersion">Add new release</button><p id="releaseSpace"></p><form id="versionForm"><label>Version<input id="versionTag" required maxlength="60" placeholder="1.2.0"></label><label>Release channel<select id="versionChannel"><option>Stable</option><option>Beta</option></select></label><label>Release notes<textarea id="versionNotes" maxlength="4000" placeholder="What changed in this version?"></textarea></label><label><span id="apkLabel">Android APK</span><input type="file" id="versionFile"></label><small>After an interruption, select the same APK to continue.</small><progress id="versionProgress" max="100" value="0"></progress><p role="status" id="versionStatus"></p><button id="retryVersion" type="button" hidden>Retry upload</button><button id="previewVersion">Preview release</button></form><div id="previewBox" hidden><iframe title="Release page preview" id="versionFrame" sandbox=""></iframe><button id="publishVersion">Publish release</button></div></dialog><dialog id="filesDesk"><button type="button" class="alt" id="exitFiles">Close</button><h2>File manager</h2><p id="spaceLine"></p><label>Files<select id="fileView"><option value="all">All uploads</option><option value="used">Attached</option><option value="unused">Unattached</option></select></label><div id="fileRows"></div></dialog><dialog id="centerDialog"><button id="centerClose" class="alt">Close</button><h2>Release activity &amp; reports</h2><p id="centerStatus" role="status"></p><div id="centerContent"></div></dialog><script src="/admin.js"></script><script src="/release-admin.js"></script><script src="/center-admin.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ZUTECHSAM — Studio Workspace</title>
+  <link rel="icon" href="/brand.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <main id="loginPanel">
+    <div class="brand">
+      <img src="/brand.svg" width="34" height="34" alt="">
+      <span>ZUTECHSAM</span>
+    </div>
+    <div class="login-art" aria-hidden="true"></div>
+    <h1>Studio sign in</h1>
+    <p class="login-sub">Manage portfolio projects, APK releases, and client enquiries.</p>
+    <form id="login">
+      <label>Username
+        <input name="username" required autocomplete="username">
+      </label>
+      <label>Password
+        <input name="password" type="password" required autocomplete="current-password">
+      </label>
+      <button type="submit">Sign in</button>
+      <p id="loginMsg" role="status"></p>
+    </form>
+  </main>
+
+  <div id="desk" hidden>
+    <aside>
+      <div class="brand">
+        <img src="/brand.svg" width="34" height="34" alt="">
+        <div>
+          <span>ZUTECHSAM</span>
+          <small>Studio desk</small>
+        </div>
+      </div>
+      <nav aria-label="Workspace sections">
+        <a href="#overview">Overview</a>
+        <a href="#projects">Project library</a>
+        <a href="#editor" id="newProject">Add project</a>
+        <a href="#enquiries">Enquiry inbox</a>
+        <a href="#settings">Website settings</a>
+      </nav>
+      <div class="aside-tools">
+        <button type="button" class="alt" id="centerButton">Release activity &amp; reports</button>
+        <button type="button" class="alt" id="storageButton">File manager</button>
+        <button type="button" id="logout" class="alt">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <div class="top">
+        <span>Studio workspace</span>
+        <span class="workspace-role">Administrator</span>
+      </div>
+
+      <p id="notice" role="status"></p>
+
+      <section id="overview">
+        <div class="mast">
+          <div>
+            <small>Production Workspace</small>
+            <h1>Studio overview</h1>
+            <p>Review incoming enquiries, publish interactive builds, and manage signed APK releases.</p>
+          </div>
+          <a href="#editor" id="quickNew">Create project</a>
+        </div>
+
+        <div id="metrics"></div>
+
+        <div class="panel">
+          <h2>Enquiries this week</h2>
+          <div id="week" class="week"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Recent projects</h2>
+            <a class="textlink" href="#projects">Open project library</a>
+          </div>
+          <div id="recent"></div>
+        </div>
+      </section>
+
+      <section id="projects">
+        <h1>Project library</h1>
+        <div class="tools">
+          <input id="search" placeholder="Search projects" aria-label="Search projects">
+          <select id="pub" aria-label="Publication status">
+            <option>All projects</option>
+            <option>Published</option>
+            <option>Draft</option>
+            <option>Featured</option>
+          </select>
+        </div>
+        <div id="list" class="panel"></div>
+      </section>
+
+      <section id="editor">
+        <h1 id="editorTitle">Add project</h1>
+        <div class="panel">
+          <div id="editorReleases" hidden>
+            <h3>Published APK releases</h3>
+            <div id="editorReleaseList"></div>
+          </div>
+
+          <form id="projectForm">
+            <div class="grid">
+              <label>Project Title
+                <input name="title" required maxlength="150">
+              </label>
+              <label>Category
+                <select name="category">
+                  <option>Apps</option>
+                  <option>Games</option>
+                  <option>AI</option>
+                  <option>Websites</option>
+                  <option>Software</option>
+                </select>
+              </label>
+            </div>
+
+            <label>Release version
+              <input name="version" maxlength="60" placeholder="e.g. 1.2.0">
+            </label>
+
+            <label>Short Summary
+              <input name="summary" maxlength="400">
+            </label>
+
+            <label>Release notes
+              <textarea name="release_notes" maxlength="4000" placeholder="What changed in this release?"></textarea>
+            </label>
+
+            <label>Description
+              <textarea name="description"></textarea>
+            </label>
+
+            <div class="grid">
+              <label>Cover Image URL
+                <input name="image_url" placeholder="https:// or /media/...">
+              </label>
+              <label>Live Demo HTTPS URL
+                <input name="demo_url" type="url" placeholder="https://">
+              </label>
+              <label>APK URL
+                <input name="apk_url" placeholder="https:// or /media/...">
+              </label>
+              <label>Video HTTPS URL
+                <input name="video_url" type="url" placeholder="https://">
+              </label>
+            </div>
+
+            <div class="uploadbox">
+              <h3>Project files</h3>
+              <p class="small">Images: PNG, JPG, WebP up to 100 MiB. APK and project files: up to <span id="apkLimit">…</span> MiB per file. Selecting a file starts a resumable chunked upload.</p>
+
+              <div class="grid">
+                <label>Cover image
+                  <input id="coverFile" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+                  <button type="button" class="alt" data-upload="coverFile" data-target="image_url">Upload Image</button>
+                </label>
+                <label>Android APK
+                  <input id="apkFile" type="file" accept=".apk">
+                  <button type="button" class="alt" data-upload="apkFile" data-target="apk_url">Upload APK</button>
+                </label>
+              </div>
+
+              <label>Screenshot gallery (up to six URLs, one per line)
+                <textarea name="screenshots" rows="3"></textarea>
+              </label>
+
+              <div class="upload-inline">
+                <label>Add a screenshot
+                  <input id="screenFile" type="file" accept=".jpg,.jpeg,.png,.webp">
+                </label>
+                <button type="button" class="alt" data-upload="screenFile" data-target="screenshots">Upload screenshot</button>
+              </div>
+
+              <h3>Downloadable project files</h3>
+              <p class="small">Attach ZIP archives, Android App Bundles (.aab), and PDFs, or link externally hosted downloads.</p>
+
+              <div class="upload-inline">
+                <input id="extraFile" type="file" aria-label="Choose a project file">
+                <button class="alt" type="button" data-upload="extraFile" data-target="attachments">Upload project file</button>
+              </div>
+
+              <div class="grid">
+                <label>Download label
+                  <input id="linkName" maxlength="240">
+                </label>
+                <label>External download URL
+                  <input id="linkUrl" type="url" placeholder="https://">
+                </label>
+              </div>
+              <button id="addLink" type="button" class="alt">Attach link</button>
+
+              <div id="attachedFiles"></div>
+              <progress id="progress" hidden max="100"></progress>
+              <p id="uploadStatus" role="status" class="small"></p>
+            </div>
+
+            <div class="check-row">
+              <label class="checkbox-label"><input type="checkbox" name="featured"> Featured project</label>
+              <label class="checkbox-label"><input type="checkbox" name="published" checked> Published</label>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="alt" id="previewRelease">Preview release</button>
+              <button type="submit">Save project &amp; files</button>
+              <button type="button" class="alt" id="cancel">Clear</button>
+            </div>
+            <p class="message" id="projectMsg"></p>
+          </form>
+        </div>
+      </section>
+
+      <section id="enquiries">
+        <h1>Enquiry inbox</h1>
+        <div class="tools">
+          <input id="findMail" placeholder="Search enquiries" aria-label="Search enquiries">
+          <select id="mailStatus" aria-label="Enquiry status">
+            <option>All enquiries</option>
+            <option>new</option>
+            <option>contacted</option>
+            <option>closed</option>
+          </select>
+        </div>
+        <div id="inbox" class="panel"></div>
+      </section>
+
+      <section id="settings">
+        <h1>Website settings</h1>
+        <form class="panel" id="settingsForm">
+          <label>Homepage headline
+            <input maxlength="90" name="headline" placeholder="Software built to ship &amp; scale.">
+          </label>
+          <label>Studio introduction
+            <textarea name="intro" maxlength="360"></textarea>
+          </label>
+          <label>Contact email
+            <input name="email" type="email" placeholder="zutechsam@gmail.com">
+          </label>
+          <button type="submit">Save website settings</button>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="releaseDialog">
+    <div class="dialog-head">
+      <h2>Project preview</h2>
+      <button id="closePreview" type="button" class="alt">Close</button>
+    </div>
+    <div id="releasePreview"></div>
+  </dialog>
+
+  <dialog id="versionDesk" aria-labelledby="versionTitle">
+    <div class="dialog-head">
+      <h2 id="versionTitle">Add release</h2>
+      <button class="alt" type="button" id="exitVersion">Close</button>
+    </div>
+    <div id="versionList"></div>
+    <button type="button" class="alt" id="newVersion">Add new release</button>
+    <p id="releaseSpace" class="small mono"></p>
+    <form id="versionForm">
+      <label>Version
+        <input id="versionTag" required maxlength="60" placeholder="1.2.0">
+      </label>
+      <label>Release channel
+        <select id="versionChannel">
+          <option>Stable</option>
+          <option>Beta</option>
+        </select>
+      </label>
+      <label>Release notes
+        <textarea id="versionNotes" maxlength="4000" placeholder="What changed in this version?"></textarea>
+      </label>
+      <label><span id="apkLabel">Android APK</span>
+        <input type="file" id="versionFile" accept=".apk">
+      </label>
+      <small class="small">After an interruption, select the same APK to resume.</small>
+      <progress id="versionProgress" max="100" value="0"></progress>
+      <p role="status" id="versionStatus" class="small"></p>
+      <div class="form-actions">
+        <button id="retryVersion" type="button" class="alt" hidden>Retry upload</button>
+        <button id="previewVersion" type="submit">Preview release</button>
+      </div>
+    </form>
+    <div id="previewBox" hidden>
+      <iframe title="Release page preview" id="versionFrame" sandbox=""></iframe>
+      <button type="button" id="publishVersion">Publish release</button>
+    </div>
+  </dialog>
+
+  <dialog id="filesDesk">
+    <div class="dialog-head">
+      <h2>File manager</h2>
+      <button type="button" class="alt" id="exitFiles">Close</button>
+    </div>
+    <p id="spaceLine" class="small mono"></p>
+    <label>Filter files
+      <select id="fileView">
+        <option value="all">All uploads</option>
+        <option value="used">Attached</option>
+        <option value="unused">Unattached</option>
+      </select>
+    </label>
+    <div id="fileRows"></div>
+  </dialog>
+
+  <dialog id="centerDialog">
+    <div class="dialog-head">
+      <h2>Release activity &amp; reports</h2>
+      <button type="button" id="centerClose" class="alt">Close</button>
+    </div>
+    <p id="centerStatus" role="status" class="small"></p>
+    <div id="centerContent"></div>
+  </dialog>
+
+  <script src="/admin.js"></script>
+  <script src="/release-admin.js"></script>
+  <script src="/center-admin.js"></script>
+</body>
+</html>

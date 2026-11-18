@@ -1,13 +1,227 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ZUTECHSAM — Web &amp; App Development Company</title><meta name="description" content="ZUTECHSAM builds custom websites, Android apps and business software. Explore interactive project demos and discuss your next development project."><meta name="theme-color" content="#f7f8fa"><link rel="icon" href="/brand.svg" type="image/svg+xml"><link rel="stylesheet" href="/public.css"></head><body class="agency"><header><div class="wrap nav"><a class="logo" href="#"><img class="brand-mark" src="/brand.svg" width="40" height="40" alt=""><span>ZU<strong>TECHSAM</strong></span></a><nav class="navlinks"><a href="#projects">Our work</a><a href="#services">Services</a><a class="pill" href="#contact">Start a project <svg aria-hidden="true" class="glyph"><use href="/icons.svg#external"></use></svg></a></nav></div></header><main>
-<section class="agency-hero wrap">
-  <div class="agency-pitch"><p class="discipline">WEB &amp; MOBILE APP DEVELOPMENT</p><h1 id="headline">We build<br><span>digital products.</span></h1>
-  <p class="introduction" id="intro">End-to-end web and mobile application development for businesses and growing ideas. Explore working demos from our portfolio.</p>
-  <div class="agency-actions"><a class="cta" href="#projects">Explore our work <svg class="glyph" aria-hidden="true"><use href="/icons.svg#arrow"></use></svg></a><a class="talk" href="#contact">How we work ↓</a></div></div>
-  <figure class="agency-visual"><img src="/agency.webp" width="1250" height="833" fetchpriority="high" alt="A website on a laptop alongside a mobile interface on a phone"></figure>
-</section>
-<section class="section projects" id="projects"><div class="wrap"><div class="collection-head"><div><h2>Projects &amp; demos</h2></div><button id="savedOnly" aria-pressed="false"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#bookmark"></use></svg> Saved <span id="savedCount">0</span></button></div><div class="filters" id="filters"></div><details class="refine"><summary>Search &amp; sort</summary><div class="toolbar"><label class="find"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#search"></use></svg><input class="search" id="search" aria-label="Search projects" placeholder="Find a project…"></label><select id="availability" aria-label="Availability"><option value="">All projects</option><option value="files">Project files</option><option value="apk_url">APK downloads</option><option value="demo_url">Live demos</option><option value="video_url">Videos</option></select><select id="sortBy" aria-label="Sort projects"><option value="featured">Featured first</option><option value="latest">Newest first</option><option value="title">Title A–Z</option></select></div></details><div class="grid" id="projectGrid" aria-live="polite">Loading collection…</div></div></section>
-<section class="section" id="services"><div class="wrap"><div class="head"><p class="discipline">Designed, developed and tested for real users</p><h2>What we can build for you</h2><p>One team for product design, development and launch.</p></div><div class="grid"><article class="card"><div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#phone"></use></svg></div><h3>Android Applications</h3><p>Polished mobile experiences, utilities and APK releases.</p></article><article class="card"><div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#game"></use></svg></div><h3>Game Development</h3><p>Interactive gameplay, beautiful interfaces and engaging experiences.</p></article><article class="card"><div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#ai"></use></svg></div><h3>AI & Automation</h3><p>Smart tools, assistants and custom automation workflows.</p></article><article class="card"><div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#web"></use></svg></div><h3>Web Development</h3><p>Fast, responsive websites and powerful web applications.</p></article><article class="card"><div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#code"></use></svg></div><h3>Custom Software</h3><p>Tailored solutions for unique business requirements.</p></article><article class="card"><div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#launch"></use></svg></div><h3>Deployment & Support</h3><p>From launch preparation to ongoing improvements.</p></article></div></div></section>
-<section class="section process" id="about"><div class="wrap"><div class="head"><span class="kicker">OUR APPROACH</span><h2>Built around your business goals</h2><p>We start with your users and requirements, design the screens, then develop and test the product. You can review working demos as the project takes shape.</p></div></div></section>
-<section class="section" id="contact"><div class="wrap"><div class="contact"><div><span class="kicker">LET'S COLLABORATE</span><h2>Let’s build something useful.</h2><p>Share what you have in mind. We’ll talk through the scope and next steps.</p><p><a id="contactEmail" href="mailto:zutechsam@gmail.com">zutechsam@gmail.com</a></p><div class="social"><a href="https://youtube.com/@Zutechsam" target="_blank" rel="noopener"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#youtube"></use></svg> YouTube</a><a href="https://t.me/zutechsam" target="_blank" rel="noopener"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#send"></use></svg> Telegram</a></div></div><form class="form" id="enquiry"><input name="name" aria-label="Your name" placeholder="Your name" required maxlength="120"><input name="email" aria-label="Email address" type="email" placeholder="Email address" required><select name="service" aria-label="Service"><option>Android App</option><option>Game Development</option><option>AI & Automation</option><option>Website</option><option>Custom Software</option></select><textarea aria-label="Project requirements" name="message" placeholder="Tell us about your project..." required maxlength="5000"></textarea><button class="cta">Send enquiry <svg aria-hidden="true" class="glyph"><use href="/icons.svg#send"></use></svg></button><div class="status" id="formStatus" role="status"></div></form></div></div></section></main><footer><div class="wrap foot"><a class="logo" href="#"><img class="brand-mark" src="/brand.svg" width="40" height="40" alt=""><span>ZU<strong>TECHSAM</strong></span></a><span>© ZUTECHSAM Software Solutions</span></div></footer>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ZUTECHSAM — Web &amp; Mobile App Development Studio</title>
+  <meta name="description" content="ZUTECHSAM builds custom websites, Android apps, and business software. Explore live interactive demos and discuss your next digital product.">
+  <meta name="theme-color" content="#f8fafc">
+  <link rel="icon" href="/brand.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/public.css">
+</head>
+<body class="agency">
+  <header>
+    <div class="wrap nav">
+      <a class="logo" href="#">
+        <img class="brand-mark" src="/brand.svg" width="34" height="34" alt="">
+        <span>ZUTECHSAM</span>
+      </a>
+      <nav class="navlinks" aria-label="Primary navigation">
+        <a href="#projects">Our work</a>
+        <a href="#services">Services</a>
+        <a href="#about">Approach</a>
+        <a href="#contact">Contact</a>
+      </nav>
+      <a class="pill" href="#contact">Start a project <svg aria-hidden="true" class="glyph"><use href="/icons.svg#external"></use></svg></a>
+    </div>
+  </header>
 
-<script src="/public.js"></script></body></html>
+  <main>
+    <section class="agency-hero wrap">
+      <div class="agency-pitch">
+        <p class="discipline">Web &amp; Mobile Product Studio</p>
+        <h1 id="headline">Software built to <span>ship &amp; scale.</span></h1>
+        <p class="introduction" id="intro">End-to-end web platforms, Android applications, and custom automation tools designed for real users. Try working builds directly from our portfolio.</p>
+        <div class="agency-actions">
+          <a class="cta" href="#projects">Explore our work <svg class="glyph" aria-hidden="true"><use href="/icons.svg#arrow"></use></svg></a>
+          <a class="talk" href="#about">How we work</a>
+        </div>
+      </div>
+      <figure class="agency-visual">
+        <img src="/agency.webp" width="1250" height="833" fetchpriority="high" referrerpolicy="no-referrer" alt="Web platform on a laptop paired with a mobile interface on a smartphone">
+      </figure>
+    </section>
+
+    <section class="section projects" id="projects">
+      <div class="wrap">
+        <div class="collection-head">
+          <div>
+            <p class="section-kicker">Portfolio &amp; live builds</p>
+            <h2>Projects &amp; demos</h2>
+          </div>
+          <button id="savedOnly" type="button" aria-pressed="false">
+            <svg aria-hidden="true" class="glyph"><use href="/icons.svg#bookmark"></use></svg>
+            Saved <span id="savedCount" class="mono">0</span>
+          </button>
+        </div>
+
+        <div class="controls-bar">
+          <div class="filters" id="filters" role="group" aria-label="Filter by category"></div>
+          <details class="refine">
+            <summary>Search &amp; sort</summary>
+            <div class="toolbar">
+              <label class="find">
+                <svg aria-hidden="true" class="glyph"><use href="/icons.svg#search"></use></svg>
+                <input class="search" id="search" aria-label="Search projects" placeholder="Find a project…">
+              </label>
+              <select id="availability" aria-label="Availability">
+                <option value="">All projects</option>
+                <option value="files">Downloadable files</option>
+                <option value="apk_url">APK releases</option>
+                <option value="demo_url">Live demos</option>
+                <option value="video_url">Videos</option>
+              </select>
+              <select id="sortBy" aria-label="Sort projects">
+                <option value="featured">Featured first</option>
+                <option value="latest">Newest first</option>
+                <option value="title">Title A–Z</option>
+              </select>
+            </div>
+          </details>
+        </div>
+
+        <div class="grid" id="projectGrid" aria-live="polite">Loading projects…</div>
+      </div>
+    </section>
+
+    <section class="section" id="services">
+      <div class="wrap">
+        <div class="head">
+          <p class="section-kicker">Capabilities</p>
+          <h2>What we design and engineer</h2>
+          <p>A single dedicated studio from initial architecture through release engineering and maintenance.</p>
+        </div>
+        <div class="services-grid">
+          <article class="service-card service-wide">
+            <div class="service-top">
+              <span class="service-num mono">01</span>
+              <div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#phone"></use></svg></div>
+            </div>
+            <h3>Android Applications</h3>
+            <p>Native and cross-platform mobile apps with clean interfaces, signed APK/AAB release channels, and telemetry-free performance.</p>
+          </article>
+          <article class="service-card">
+            <div class="service-top">
+              <span class="service-num mono">02</span>
+              <div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#web"></use></svg></div>
+            </div>
+            <h3>Web Platforms</h3>
+            <p>Fast, responsive websites and full-stack web applications engineered for clarity and speed.</p>
+          </article>
+          <article class="service-card">
+            <div class="service-top">
+              <span class="service-num mono">03</span>
+              <div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#ai"></use></svg></div>
+            </div>
+            <h3>AI &amp; Automation</h3>
+            <p>Practical workflow automation, internal tooling, and intelligent document or customer pipelines.</p>
+          </article>
+          <article class="service-card">
+            <div class="service-top">
+              <span class="service-num mono">04</span>
+              <div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#game"></use></svg></div>
+            </div>
+            <h3>Game Development</h3>
+            <p>Interactive 2D/3D gameplay loops, responsive controls, and playable browser or mobile builds.</p>
+          </article>
+          <article class="service-card service-wide">
+            <div class="service-top">
+              <span class="service-num mono">05</span>
+              <div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#code"></use></svg></div>
+            </div>
+            <h3>Custom Business Software</h3>
+            <p>Bespoke internal dashboards, release management systems, inventory workflows, and API integrations built around your exact operations.</p>
+          </article>
+          <article class="service-card">
+            <div class="service-top">
+              <span class="service-num mono">06</span>
+              <div class="icon"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#launch"></use></svg></div>
+            </div>
+            <h3>Deployment &amp; Support</h3>
+            <p>Production hosting, versioned rollout pipelines, and ongoing reliability maintenance.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section process" id="about">
+      <div class="wrap">
+        <div class="head">
+          <p class="section-kicker">Our approach</p>
+          <h2>Built around working software, not slide decks</h2>
+        </div>
+        <div class="process-steps">
+          <div class="step">
+            <span class="mono step-num">01</span>
+            <h3>Scope &amp; Architecture</h3>
+            <p>We align on user flows, technical constraints, and data models before writing production code.</p>
+          </div>
+          <div class="step">
+            <span class="mono step-num">02</span>
+            <h3>Interactive Builds</h3>
+            <p>You review real browser demos and installable Android test builds throughout development.</p>
+          </div>
+          <div class="step">
+            <span class="mono step-num">03</span>
+            <h3>Launch &amp; Iteration</h3>
+            <p>Clean handoff, versioned release notes, and ongoing support as your product grows.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="contact">
+      <div class="wrap">
+        <div class="contact">
+          <div class="contact-info">
+            <p class="kicker">Start a conversation</p>
+            <h2>Let’s build something useful.</h2>
+            <p class="contact-lead">Share your requirements or timeline. We’ll review the scope and follow up with clear next steps.</p>
+            <p class="contact-mail"><a id="contactEmail" href="mailto:zutechsam@gmail.com">zutechsam@gmail.com</a></p>
+            <div class="social">
+              <a href="https://youtube.com/@Zutechsam" target="_blank" rel="noopener"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#youtube"></use></svg> YouTube</a>
+              <a href="https://t.me/zutechsam" target="_blank" rel="noopener"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#send"></use></svg> Telegram</a>
+            </div>
+          </div>
+          <form class="form" id="enquiry">
+            <div class="form-row">
+              <input name="name" aria-label="Your name" placeholder="Your name" required maxlength="120">
+              <input name="email" aria-label="Email address" type="email" placeholder="Email address" required>
+            </div>
+            <select name="service" aria-label="Service">
+              <option>Android App</option>
+              <option>Game Development</option>
+              <option>AI &amp; Automation</option>
+              <option>Website</option>
+              <option>Custom Software</option>
+            </select>
+            <textarea aria-label="Project requirements" name="message" placeholder="Tell us about your project, goals, and timeline..." required maxlength="5000"></textarea>
+            <button class="cta">Send enquiry <svg aria-hidden="true" class="glyph"><use href="/icons.svg#send"></use></svg></button>
+            <div class="status" id="formStatus" role="status"></div>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot">
+      <a class="logo" href="#">
+        <img class="brand-mark" src="/brand.svg" width="30" height="30" alt="">
+        <span>ZUTECHSAM</span>
+      </a>
+      <div class="foot-links">
+        <a href="#projects">Projects</a>
+        <a href="#services">Services</a>
+        <a href="#contact">Contact</a>
+      </div>
+      <span class="copyright">© ZUTECHSAM Software Solutions</span>
+    </div>
+  </footer>
+
+  <script src="/public.js"></script>
+</body>
+</html>

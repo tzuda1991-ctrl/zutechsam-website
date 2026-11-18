@@ -1,10 +1,11 @@
 {
   "name": "zutechsam-website",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "check": "node --check server.js && node --check uploads.js && node --check releases.js && node --check release-center.js && node --check project-page.js && node --check project-tools.js && node --check public.js && node --check admin.js && node --check release-admin.js && node --check center-admin.js && node --check center-public.js"
   },
   "engines": {
     "node": ">=20"
