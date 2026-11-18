@@ -125,7 +125,15 @@ if(path==='/api/admin/upload' && req.method==='POST'){
   const result=await writePart(req,id,total,0,total);
   return send(res,result.url?201:400,result.url?{ok:true,url:result.url}:{error:'Incomplete upload'});
 }
-if(path==='/api/admin/projects'&&req.method==='GET'){const q=await pool.query('SELECT * FROM projects ORDER BY created_at DESC LIMIT 500');return send(res,200,q.rows)}
+if(path==='/api/admin/projects'&&req.method==='GET'){const q=await pool.query( `SELECT p.*,(
+  SELECT count(DISTINCT url)::int FROM (
+    SELECT NULLIF(p.apk_url,'') AS url
+    UNION ALL SELECT file->>'url' FROM jsonb_array_elements(p.attachments) AS file
+    UNION ALL SELECT r.url FROM project_releases r WHERE r.project_id=p.id
+  ) downloads
+) AS file_count,
+(SELECT count(*)::int FROM project_releases r WHERE r.project_id=p.id) AS release_count
+FROM projects p ORDER BY p.created_at DESC LIMIT 500`);return send(res,200,q.rows)}
 if(path==='/api/admin/enquiries'&&req.method==='GET'){const q=await pool.query('SELECT * FROM enquiries ORDER BY created_at DESC LIMIT 500');return send(res,200,q.rows)}
 if(path==='/api/admin/projects'&&req.method==='POST'||/^\/api\/admin\/projects\/\d+$/.test(path)&&['PUT','DELETE'].includes(req.method)){
 const id=Number(path.split('/').pop());if(req.method==='DELETE'){await pool.query('DELETE FROM projects WHERE id=$1',[id]);return send(res,200,{ok:true})}

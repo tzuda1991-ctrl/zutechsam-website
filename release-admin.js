@@ -90,7 +90,7 @@
   };
   $('publishVersion').onclick=async()=>{
     if(!ready||working)return;lock(true);
-    try{const result=await api(endpoint(),'POST',draft);reset();await list();status.textContent=result.published?'Published on the existing project page.':'Release saved to draft project.';}
+    try{const result=await api(endpoint(),'POST',draft);reset();await list();projects=await api('/api/admin/projects');render();status.textContent=result.published?'Published on the existing project page.':'Release saved to draft project.';}
     catch(error){status.textContent=error.message;}finally{lock(false);}
   };
   $('versionList').onclick=async e=>{
