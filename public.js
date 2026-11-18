@@ -15,8 +15,8 @@ function render(){
   if($('sortBy').value==='latest')list.sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   $('projectGrid').innerHTML=list.map(p=>{
     const selected=saved.has(String(p.id));
-    return '<article class="card project-card"><a href="/projects/'+p.id+'" aria-label="Open '+esc(p.title)+'"><img class="art" loading="lazy" alt="" src="'+esc(image(p))+'"></a><button class="fav" data-save="'+p.id+'" aria-label="Save '+esc(p.title)+'" aria-pressed="'+selected+'">'+(selected?'♥':'♡')+'</button><div class="project-body"><div class="tag">'+esc(p.category)+(p.version?' · '+esc(p.version):'')+'</div><h3>'+esc(p.title)+'</h3><p>'+esc(p.summary)+'</p><a class="textlink" href="/projects/'+p.id+'">Open project ↗</a></div></article>';
-  }).join('')||'<p class="empty">'+(onlySaved?'Your saved projects appear here. Use the heart on a project to save it on this device.':'No matching projects. Try another filter.')+'</p>';
+    return '<article class="card project-card"><a href="/projects/'+p.id+'" aria-label="Open '+esc(p.title)+'"><img class="art" loading="lazy" alt="" src="'+esc(image(p))+'"></a><button class="fav" data-save="'+p.id+'" aria-label="Save '+esc(p.title)+'" aria-pressed="'+selected+'"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#bookmark"></use></svg></button><div class="project-body"><div class="tag">'+esc(p.category)+(p.version?' · '+esc(p.version):'')+'</div><h3>'+esc(p.title)+'</h3><p>'+esc(p.summary)+'</p><a class="textlink" href="/projects/'+p.id+'">Open project <svg aria-hidden="true" class="glyph"><use href="/icons.svg#external"></use></svg></a></div></article>';
+  }).join('')||'<p class="empty">'+(onlySaved?'Your saved projects appear here. Use the bookmark on a project to save it on this device.':'No matching projects. Try another filter.')+'</p>';
 }
 $('projectGrid').onclick=e=>{
   const id=e.target.closest('[data-save]')?.dataset.save;if(!id)return;
