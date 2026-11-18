@@ -8,7 +8,7 @@
   function invalidate(){ready=false;$('previewBox').hidden=true;$('versionFrame').removeAttribute('srcdoc');}
   function lock(on){
     working=on;
-    for(const id of ['versionFile','versionTag','versionNotes','previewVersion','publishVersion','retryVersion','exitVersion'])$(id).disabled=on;
+    for(const id of ['versionFile','versionTag','versionNotes','versionChannel','previewVersion','publishVersion','retryVersion','exitVersion'])$(id).disabled=on;
   }
   function reset(){
     draft={};persist();$('versionForm').reset();$('versionProgress').value=0;$('retryVersion').hidden=true;invalidate();
@@ -23,7 +23,7 @@
     if(editing===project.id)$('editorReleaseList').innerHTML=rowHtml(rows);
   }
   function rowHtml(rows){
-    return rows.map(r=>'<div class="file-item"><b>'+esc(r.version)+(r.is_latest?' · Latest':'')+'</b><small>'+esc(r.filename)+' · '+mib(r.size)+' · '+esc(new Date(r.published_at).toLocaleDateString())+' · '+esc(r.download_clicks)+' download clicks</small><button type="button" class="alt" data-change="'+r.id+'">Edit release</button><button type="button" class="danger" data-drop="'+r.id+'">Delete release</button>'+(r.is_latest?'':'<button class="alt" data-promote="'+r.id+'">Make latest</button>')+'</div>').join('')||'No versioned releases yet.';
+    return rows.map(r=>'<div class="file-item"><b>'+esc(r.version)+' · '+esc(r.channel)+(r.is_latest?' · Latest':'')+'</b><small>'+esc(r.filename)+' · '+mib(r.size)+' · '+esc(new Date(r.published_at).toLocaleDateString())+' · '+esc(r.download_clicks)+' download clicks</small><button type="button" class="alt" data-change="'+r.id+'">Edit release</button><button type="button" class="danger" data-drop="'+r.id+'">Delete release</button>'+(r.is_latest?'':'<button class="alt" data-promote="'+r.id+'">Promote to latest stable</button>')+'</div>').join('')||'No versioned releases yet.';
   }
   async function openDesk(id,action,key){
     if(working||uploading)return;
@@ -37,6 +37,7 @@
   }
   for(const id of ['recent','list'])$(id).addEventListener('click',e=>{const key=e.target.dataset.release;if(key)openDesk(key);});
   function mode(){
+    $('versionChannel').value=selected?.channel||draft.channel||'Stable';
     $('previewVersion').textContent=selected?'Save release changes':'Preview release';
     $('apkLabel').textContent=selected?'Replace APK (optional)':'Android APK';
     $('versionTitle').textContent=(selected?'Edit release '+selected.version:'Manage releases')+' · '+project.title;
@@ -113,11 +114,12 @@
     }catch(e){status.textContent=e.message;$('retryVersion').hidden=complete;}finally{lock(false);}
   }
   fileInput.onchange=upload;$('retryVersion').onclick=upload;
+  $('versionChannel').onchange=()=>{draft.channel=$('versionChannel').value;persist();invalidate();};
   const endpoint=()=>'/api/admin/projects/'+project.id+'/releases';
   $('versionForm').onsubmit=async e=>{
     e.preventDefault();if(working)return;
     if(!draft.url||!$('retryVersion').hidden){status.textContent='Finish the selected upload first.';return;}
-    draft.version=$('versionTag').value.trim();draft.notes=$('versionNotes').value.trim();persist();lock(true);
+    draft.channel=$('versionChannel').value;draft.version=$('versionTag').value.trim();draft.notes=$('versionNotes').value.trim();persist();lock(true);
     try{
       if(selected){
         await api(endpoint()+'/'+selected.id,'PUT',{...draft,revision:selected.revision});

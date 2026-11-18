@@ -1,6 +1,7 @@
 import {projectPage,sampleHtml,sampleFor} from './project-page.js';
 import {releaseSchema,publicProjects,releaseView,releaseApi} from './releases.js';
 import {uploadPosition} from './uploads.js';
+import {centerSchema,centerApi,indexPackages} from './release-center.js';
 import http from 'node:http';
 import {readFile,stat} from 'node:fs/promises';
 import {createReadStream} from 'node:fs';
@@ -11,7 +12,7 @@ import pg from 'pg';
 const port=Number(process.env.PORT||3000),admin=process.env.SITE_MODE==='admin';
 const pool=process.env.DATABASE_URL?new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false}}):null;
 const sessions=new Map();
-const assets = new Map(await Promise.all(['public.css','admin.css','admin.js','public.js','release-admin.js','studio.webp','AI.webp','Games.webp','Websites.webp'].map(async name => ['/'+name,await readFile(new URL('./'+name,import.meta.url))])));
+const assets = new Map(await Promise.all(['public.css','admin.css','admin.js','public.js','release-admin.js','center-admin.js','center-public.js','studio.webp','AI.webp','Games.webp','Websites.webp'].map(async name => ['/'+name,await readFile(new URL('./'+name,import.meta.url))])));
 import {directory as uploadDir, apkMB, startUpload, writePart, cleanStaging} from './uploads.js';
 if(admin) setInterval(()=>cleanStaging().catch(console.error),3600000).unref();
 const mediaOrigin=(process.env.MEDIA_BASE_URL||'').replace(/\/$/,'');
@@ -20,7 +21,7 @@ const html=await readFile(new URL(admin?'./admin.html':'./index.html',import.met
 const send=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))};
 const clean=s=>String(s||'').trim();
 const hash=(p,s)=>scryptSync(p,s,64).toString('hex');
-async function init(){if(!pool)return;await pool.query(`CREATE TABLE IF NOT EXISTS studio_settings(id INTEGER PRIMARY KEY, data JSONB NOT NULL);CREATE TABLE IF NOT EXISTS projects(id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,category TEXT NOT NULL,summary TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',image_url TEXT NOT NULL DEFAULT '',demo_url TEXT NOT NULL DEFAULT '',apk_url TEXT NOT NULL DEFAULT '',video_url TEXT NOT NULL DEFAULT '',featured BOOLEAN NOT NULL DEFAULT false,published BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now());ALTER TABLE projects ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]', ADD COLUMN IF NOT EXISTS screenshots JSONB NOT NULL DEFAULT '[]', ADD COLUMN IF NOT EXISTS release_notes TEXT NOT NULL DEFAULT '';ALTER TABLE projects ADD COLUMN IF NOT EXISTS version TEXT NOT NULL DEFAULT '';CREATE TABLE IF NOT EXISTS enquiries(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,email TEXT NOT NULL,service TEXT NOT NULL,message TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'new',created_at TIMESTAMPTZ NOT NULL DEFAULT now());CREATE TABLE IF NOT EXISTS admins(id BIGSERIAL PRIMARY KEY,username TEXT UNIQUE NOT NULL,salt TEXT NOT NULL,password_hash TEXT NOT NULL);${releaseSchema}`);if(process.env.ADMIN_USERNAME&&process.env.ADMIN_PASSWORD){const found=await pool.query('SELECT id FROM admins LIMIT 1');if(!found.rowCount){const salt=randomBytes(16).toString('hex');await pool.query('INSERT INTO admins(username,salt,password_hash) VALUES($1,$2,$3)',[process.env.ADMIN_USERNAME,salt,hash(process.env.ADMIN_PASSWORD,salt)])}}
+async function init(){if(!pool)return;await pool.query(`CREATE TABLE IF NOT EXISTS studio_settings(id INTEGER PRIMARY KEY, data JSONB NOT NULL);CREATE TABLE IF NOT EXISTS projects(id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,category TEXT NOT NULL,summary TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',image_url TEXT NOT NULL DEFAULT '',demo_url TEXT NOT NULL DEFAULT '',apk_url TEXT NOT NULL DEFAULT '',video_url TEXT NOT NULL DEFAULT '',featured BOOLEAN NOT NULL DEFAULT false,published BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now());ALTER TABLE projects ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]', ADD COLUMN IF NOT EXISTS screenshots JSONB NOT NULL DEFAULT '[]', ADD COLUMN IF NOT EXISTS release_notes TEXT NOT NULL DEFAULT '';ALTER TABLE projects ADD COLUMN IF NOT EXISTS version TEXT NOT NULL DEFAULT '';CREATE TABLE IF NOT EXISTS enquiries(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,email TEXT NOT NULL,service TEXT NOT NULL,message TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'new',created_at TIMESTAMPTZ NOT NULL DEFAULT now());CREATE TABLE IF NOT EXISTS admins(id BIGSERIAL PRIMARY KEY,username TEXT UNIQUE NOT NULL,salt TEXT NOT NULL,password_hash TEXT NOT NULL);${releaseSchema};${centerSchema}`);if(process.env.ADMIN_USERNAME&&process.env.ADMIN_PASSWORD){const found=await pool.query('SELECT id FROM admins LIMIT 1');if(!found.rowCount){const salt=randomBytes(16).toString('hex');await pool.query('INSERT INTO admins(username,salt,password_hash) VALUES($1,$2,$3)',[process.env.ADMIN_USERNAME,salt,hash(process.env.ADMIN_PASSWORD,salt)])}}
 if(admin){
 const count=await pool.query('SELECT COUNT(*)::int AS n FROM projects');
 if(count.rows[0].n===0){
@@ -35,7 +36,11 @@ console.log('Inserted four labeled test projects');
 }
 }
 }
-init().catch(e=>console.error('Database initialization failed:',e.message));
+init().then(()=>{
+  if(!admin||!pool)return;
+  async function scan(){try{await indexPackages(pool);}catch(error){console.error(error.message);}finally{setTimeout(scan,60000).unref();}}
+  scan();
+}).catch(e=>console.error('Database initialization failed:',e.message));
 async function body(req){let chunks=[],size=0;for await(const c of req){size+=c.length;if(size>100000)throw Error('Request too large');chunks.push(c)}return JSON.parse(Buffer.concat(chunks).toString()||'{}')}
 const token=req=>(req.headers.authorization||'').replace(/^Bearer /,'');
 const auth=req=>{const s=sessions.get(token(req));if(!s||s.expires<Date.now())return false;return true};
@@ -71,6 +76,7 @@ try{
   await pipeline(createReadStream(file,{start,end}),res).catch(()=>{});return;
 }catch{return send(res,404,{error:'File not found'})}}
 if(!pool)return send(res,503,{error:'Database is not configured. Add DATABASE_URL on Railway.'});
+if(!admin&&await centerApi(path,req,res,{pool,body,send,admin}))return;
 const releaseDownload=!admin&&/^\/projects\/(\d+)\/releases\/(\d+)\/download$/.exec(path);
 if(releaseDownload && ['GET','HEAD'].includes(req.method)){
   const sql=req.method==='GET'?'UPDATE project_releases r SET download_clicks=r.download_clicks+1 FROM projects p WHERE r.id=$2 AND p.id=$1 AND p.published AND r.project_id=p.id RETURNING r.url':'SELECT r.url FROM project_releases r JOIN projects p ON p.id=r.project_id WHERE r.id=$2 AND p.id=$1 AND p.published';
@@ -97,6 +103,7 @@ if(!admin)return send(res,404,{error:'Not found'});
 if(path==='/api/login'&&req.method==='POST'){const b=await body(req);const q=await pool.query('SELECT * FROM admins WHERE username=$1',[clean(b.username)]);const a=q.rows[0];if(!a||!timingSafeEqual(Buffer.from(hash(String(b.password||''),a.salt),'hex'),Buffer.from(a.password_hash,'hex')))return send(res,401,{error:'Invalid credentials'});const t=randomBytes(32).toString('hex');sessions.set(t,{expires:Date.now()+8*3600000});return send(res,200,{token:t})}
 if(path==='/api/logout'&&req.method==='POST'){sessions.delete(token(req));return send(res,200,{ok:true})}
 if(!auth(req))return send(res,401,{error:'Login required'});
+if(await centerApi(path,req,res,{pool,body,send,admin}))return;
 if(await releaseApi(path,req,res,{pool,body,send}))return;
 if(path.startsWith('/api/admin/uploads/') && req.method==='GET'){
   const size=Number(new URL(req.url,'http://localhost').searchParams.get('size'));
