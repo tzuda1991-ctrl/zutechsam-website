@@ -44,13 +44,11 @@
     const img = document.getElementById('lightboxImg');
     const count = document.getElementById('lightboxCount');
     let idx = 0;
-
     const showIndex = (next) => {
       idx = (next + galleryItems.length) % galleryItems.length;
       img.src = galleryItems[idx].dataset.lightbox;
       count.textContent = `${idx + 1} / ${galleryItems.length}`;
     };
-
     galleryItems.forEach((el, i) => {
       el.addEventListener('click', (e) => {
         e.preventDefault();
@@ -58,7 +56,6 @@
         lightbox.showModal();
       });
     });
-
     document.getElementById('lightboxPrev').onclick = () => showIndex(idx - 1);
     document.getElementById('lightboxNext').onclick = () => showIndex(idx + 1);
     document.getElementById('lightboxClose').onclick = () => lightbox.close();
@@ -88,6 +85,8 @@
     }
   }
 
+  const basePath = location.pathname.replace(/\/$/, '');
+
   const form = document.getElementById('reportForm');
   if (form) {
     form.onsubmit = async (e) => {
@@ -101,7 +100,7 @@
         const file = fields.image.files[0];
         const payload = { release: fields.release.value, message: fields.message.value };
         if (file) payload.screenshot = await screenshot(file);
-        const response = await fetch(location.pathname.replace(/\/$/, '') + '/reports', {
+        const response = await fetch(basePath + '/reports', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -116,5 +115,107 @@
         button.disabled = false;
       }
     };
+  }
+
+  const reviewForm = document.getElementById('reviewForm');
+  if (reviewForm) {
+    reviewForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const status = reviewForm.querySelector('[role=status]');
+      const button = reviewForm.querySelector('button');
+      button.disabled = true;
+      status.textContent = 'Submitting…';
+      try {
+        const fields = reviewForm.elements;
+        const response = await fetch(basePath + '/reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            author_name: fields.author_name.value,
+            rating: Number(fields.rating.value),
+            comment: fields.comment.value,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw Error(data.error || 'Could not submit review.');
+        reviewForm.reset();
+        status.textContent = 'Thank you! Your review has been queued for studio approval.';
+      } catch (err) {
+        status.textContent = err.message;
+      } finally {
+        button.disabled = false;
+      }
+    };
+  }
+
+  const betaForm = document.getElementById('betaForm');
+  if (betaForm) {
+    betaForm.onsubmit = async (e) => {
+      e.preventDefault();
+      const status = betaForm.querySelector('[role=status]');
+      const button = betaForm.querySelector('button');
+      button.disabled = true;
+      status.textContent = 'Joining…';
+      try {
+        const fields = betaForm.elements;
+        const response = await fetch(basePath + '/beta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: fields.email.value,
+            device: fields.device.value,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw Error(data.error || 'Could not join beta list.');
+        betaForm.reset();
+        status.textContent = 'You are on the beta testing list for upcoming releases.';
+      } catch (err) {
+        status.textContent = err.message;
+      } finally {
+        button.disabled = false;
+      }
+    };
+  }
+
+  // Public /releases changelog filters
+  const channelGroup = document.getElementById('channelFilter');
+  const categorySelect = document.getElementById('changelogCategory');
+  const changelogList = document.getElementById('changelogList');
+  if (channelGroup && categorySelect && changelogList) {
+    let channel = 'All';
+    const filterChangelog = () => {
+      const cat = categorySelect.value;
+      let shown = 0;
+      changelogList.querySelectorAll('.changelog-entry').forEach((el) => {
+        const matchChannel = channel === 'All' || el.dataset.channel === channel;
+        const matchCat = cat === 'All' || el.dataset.category === cat;
+        el.hidden = !(matchChannel && matchCat);
+        if (!el.hidden) shown++;
+      });
+      let empty = changelogList.querySelector('.changelog-empty');
+      if (!shown) {
+        if (!empty) {
+          empty = document.createElement('p');
+          empty.className = 'empty changelog-empty';
+          empty.textContent = 'No releases match the selected channel and category.';
+          changelogList.append(empty);
+        }
+      } else if (empty) {
+        empty.remove();
+      }
+    };
+    channelGroup.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-val]');
+      if (!btn) return;
+      channel = btn.dataset.val;
+      channelGroup.querySelectorAll('button').forEach((b) => {
+        const active = b === btn;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', String(active));
+      });
+      filterChangelog();
+    });
+    categorySelect.addEventListener('change', filterChangelog);
   }
 })();

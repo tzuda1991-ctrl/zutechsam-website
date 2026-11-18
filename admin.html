@@ -45,6 +45,7 @@
         <a href="#projects">Project library</a>
         <a href="#editor" id="newProject">Add project</a>
         <a href="#enquiries">Enquiry inbox</a>
+        <a href="#content">Reviews &amp; content</a>
         <a href="#settings">Website settings</a>
       </nav>
       <div class="aside-tools">
@@ -57,9 +58,8 @@
     <main class="workspace">
       <div class="top">
         <span>Studio workspace</span>
-        <span class="workspace-role">Administrator</span>
+        <span class="workspace-role" id="workspaceRole">Administrator</span>
       </div>
-
       <p id="notice" role="status"></p>
 
       <section id="overview">
@@ -71,14 +71,11 @@
           </div>
           <a href="#editor" id="quickNew">Create project</a>
         </div>
-
         <div id="metrics"></div>
-
         <div class="panel">
           <h2>Enquiries this week</h2>
           <div id="week" class="week"></div>
         </div>
-
         <div class="panel">
           <div class="panel-head">
             <h2>Recent projects</h2>
@@ -96,6 +93,7 @@
             <option>All projects</option>
             <option>Published</option>
             <option>Draft</option>
+            <option>Scheduled</option>
             <option>Featured</option>
           </select>
         </div>
@@ -109,7 +107,16 @@
             <h3>Published APK releases</h3>
             <div id="editorReleaseList"></div>
           </div>
-
+          <div id="previewTokenBox" class="uploadbox" hidden>
+            <h3>Private client preview link</h3>
+            <p class="small">Share an unlisted draft preview with clients without publishing publicly.</p>
+            <div class="upload-inline">
+              <input id="previewUrlInput" readonly aria-label="Private preview link">
+              <button type="button" class="alt" id="copyPreviewUrl">Copy link</button>
+              <button type="button" class="alt" id="genPreviewToken">Generate link</button>
+              <button type="button" class="danger" id="clearPreviewToken" hidden>Revoke</button>
+            </div>
+          </div>
           <form id="projectForm">
             <div class="grid">
               <label>Project Title
@@ -125,7 +132,6 @@
                 </select>
               </label>
             </div>
-
             <div class="grid">
               <label>URL Slug (optional)
                 <input name="slug" maxlength="80" placeholder="auto-generated from title">
@@ -134,27 +140,32 @@
                 <input name="version" maxlength="60" placeholder="e.g. 1.2.0">
               </label>
             </div>
-
-            <label>Tech stack (comma or · separated)
-              <input name="tech_stack" maxlength="240" placeholder="e.g. Kotlin, Jetpack Compose, PostgreSQL">
-            </label>
-
+            <div class="grid">
+              <label>Tech stack (comma or · separated)
+                <input name="tech_stack" maxlength="240" placeholder="e.g. Kotlin, Jetpack Compose, PostgreSQL">
+              </label>
+              <label>Scheduled publish time (optional)
+                <input name="publish_at" type="datetime-local">
+              </label>
+            </div>
             <label>Short Summary
               <input name="summary" maxlength="400">
             </label>
-
             <label>Key highlights (up to 8 lines, one per line)
               <textarea name="highlights" rows="3" placeholder="Offline mode&#10;Signed APK updates&#10;Real-time sync"></textarea>
             </label>
-
+            <label>Impact metrics (up to 6 lines formatted as Label: Value)
+              <textarea name="metrics" rows="3" placeholder="Active users: 12,400+&#10;Crash-free rate: 99.8%"></textarea>
+            </label>
+            <label>Custom interactive browser demo HTML/JS (optional, sandboxed)
+              <textarea name="demo_html" rows="4" maxlength="32000" placeholder="&lt;button onclick=&quot;alert('Hello')&quot;&gt;Test build&lt;/button&gt;"></textarea>
+            </label>
             <label>Release notes
               <textarea name="release_notes" maxlength="4000" placeholder="What changed in this release?"></textarea>
             </label>
-
             <label>Description
               <textarea name="description"></textarea>
             </label>
-
             <div class="grid">
               <label>Cover Image URL
                 <input name="image_url" placeholder="https:// or /media/...">
@@ -169,11 +180,9 @@
                 <input name="video_url" type="url" placeholder="https://">
               </label>
             </div>
-
             <div class="uploadbox">
               <h3>Project files</h3>
               <p class="small">Images: PNG, JPG, WebP up to 100 MiB. APK and project files: up to <span id="apkLimit">…</span> MiB per file. Selecting a file starts a resumable chunked upload.</p>
-
               <div class="grid">
                 <label>Cover image
                   <input id="coverFile" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
@@ -184,26 +193,21 @@
                   <button type="button" class="alt" data-upload="apkFile" data-target="apk_url">Upload APK</button>
                 </label>
               </div>
-
               <label>Screenshot gallery (up to six URLs, one per line)
                 <textarea name="screenshots" rows="3"></textarea>
               </label>
-
               <div class="upload-inline">
                 <label>Add a screenshot
                   <input id="screenFile" type="file" accept=".jpg,.jpeg,.png,.webp">
                 </label>
                 <button type="button" class="alt" data-upload="screenFile" data-target="screenshots">Upload screenshot</button>
               </div>
-
               <h3>Downloadable project files</h3>
               <p class="small">Attach ZIP archives, Android App Bundles (.aab), and PDFs, or link externally hosted downloads.</p>
-
               <div class="upload-inline">
                 <input id="extraFile" type="file" aria-label="Choose a project file">
                 <button class="alt" type="button" data-upload="extraFile" data-target="attachments">Upload project file</button>
               </div>
-
               <div class="grid">
                 <label>Download label
                   <input id="linkName" maxlength="240">
@@ -213,17 +217,14 @@
                 </label>
               </div>
               <button id="addLink" type="button" class="alt">Attach link</button>
-
               <div id="attachedFiles"></div>
               <progress id="progress" hidden max="100"></progress>
               <p id="uploadStatus" role="status" class="small"></p>
             </div>
-
             <div class="check-row">
               <label class="checkbox-label"><input type="checkbox" name="featured"> Featured project</label>
               <label class="checkbox-label"><input type="checkbox" name="published" checked> Published</label>
             </div>
-
             <div class="form-actions">
               <button type="button" class="alt" id="previewRelease">Preview release</button>
               <button type="submit">Save project &amp; files</button>
@@ -252,9 +253,71 @@
         <div id="inbox" class="panel"></div>
       </section>
 
+      <section id="content">
+        <h1>Reviews, testimonials &amp; FAQs</h1>
+
+        <div class="panel">
+          <h2>Project review moderation</h2>
+          <div id="reviewModerationList"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Beta tester signups</h2>
+          <div id="betaSignupList"></div>
+        </div>
+
+        <form class="panel" id="testimonialForm">
+          <h2>Client testimonials</h2>
+          <div class="grid">
+            <label>Client name
+              <input name="author_name" required maxlength="100" placeholder="Priya Sharma">
+            </label>
+            <label>Role / Title
+              <input name="author_role" maxlength="100" placeholder="Founder">
+            </label>
+            <label>Company
+              <input name="company" maxlength="100" placeholder="Northstar Logistics">
+            </label>
+            <label>Rating (1–5) &amp; display order
+              <div class="grid">
+                <select name="rating"><option value="5">5 stars</option><option value="4">4 stars</option><option value="3">3 stars</option></select>
+                <input name="sort_order" type="number" value="0" aria-label="Sort order">
+              </div>
+            </label>
+          </div>
+          <label>Testimonial quote
+            <textarea name="quote" required maxlength="800" placeholder="ZUTECHSAM delivered our Android app and backend ahead of schedule."></textarea>
+          </label>
+          <div class="check-row">
+            <label class="checkbox-label"><input type="checkbox" name="published" checked> Show on homepage</label>
+          </div>
+          <button type="submit">Add testimonial</button>
+          <div id="testimonialsAdminList" class="content-list"></div>
+        </form>
+
+        <form class="panel" id="faqForm">
+          <h2>Homepage FAQs</h2>
+          <div class="grid">
+            <label>Question
+              <input name="question" required maxlength="240" placeholder="How do you handle Android APK updates?">
+            </label>
+            <label>Display order
+              <input name="sort_order" type="number" value="0">
+            </label>
+          </div>
+          <label>Answer
+            <textarea name="answer" required maxlength="2000" placeholder="Every build is signed, SHA-256 checksummed, and served over /latest.json for seamless updates."></textarea>
+          </label>
+          <div class="check-row">
+            <label class="checkbox-label"><input type="checkbox" name="published" checked> Show on homepage</label>
+          </div>
+          <button type="submit">Add FAQ</button>
+          <div id="faqsAdminList" class="content-list"></div>
+        </form>
+      </section>
+
       <section id="settings">
         <h1>Website &amp; studio settings</h1>
-
         <form class="panel" id="settingsForm">
           <h2>Public copy &amp; Telegram alerts</h2>
           <label>Homepage headline
@@ -295,10 +358,47 @@
           <p class="small" id="passwordMsg" role="status"></p>
         </form>
 
+        <div class="panel" id="teamPanel">
+          <h2>Team accounts, active sessions &amp; login audit</h2>
+          <form id="teamForm" hidden>
+            <div class="grid">
+              <label>Username
+                <input name="username" required minlength="3" maxlength="60" placeholder="editor.sam">
+              </label>
+              <label>Password (min 8 chars)
+                <input name="password" type="password" required minlength="8" maxlength="128">
+              </label>
+              <label>Role
+                <select name="role">
+                  <option value="editor">Editor</option>
+                  <option value="owner">Owner</option>
+                </select>
+              </label>
+            </div>
+            <button type="submit">Add team member</button>
+            <p class="small" id="teamMsg" role="status"></p>
+          </form>
+          <h3>Team members</h3>
+          <div id="teamMembersList"></div>
+          <h3>Active admin sessions</h3>
+          <div id="activeSessionsList"></div>
+          <h3>Recent sign-in audit log</h3>
+          <div id="auditLogList"></div>
+        </div>
+
         <div class="panel">
-          <h2>Studio backup</h2>
-          <p class="small">Download a complete JSON snapshot of projects, release records, studio settings, and enquiries.</p>
-          <button type="button" class="alt" id="exportBackup">Download JSON backup</button>
+          <h2>Studio backup &amp; restore</h2>
+          <p class="small">Export a complete JSON snapshot or restore from a previous backup file.</p>
+          <div class="form-actions">
+            <button type="button" class="alt" id="exportBackup">Download JSON backup</button>
+          </div>
+          <div class="uploadbox" id="restoreBox">
+            <label>Restore from JSON snapshot (Owner only)
+              <input type="file" id="restoreFile" accept=".json,application/json">
+            </label>
+            <button type="button" class="danger" id="restoreBackup">Restore JSON backup</button>
+            <p class="small" id="restoreMsg" role="status"></p>
+          </div>
         </div>
       </section>
     </main>
@@ -321,14 +421,19 @@
     <button type="button" class="alt" id="newVersion">Add new release</button>
     <p id="releaseSpace" class="small mono"></p>
     <form id="versionForm">
-      <label>Version
-        <input id="versionTag" required maxlength="60" placeholder="1.2.0">
-      </label>
-      <label>Release channel
-        <select id="versionChannel">
-          <option>Stable</option>
-          <option>Beta</option>
-        </select>
+      <div class="grid">
+        <label>Version
+          <input id="versionTag" required maxlength="60" placeholder="1.2.0">
+        </label>
+        <label>Release channel
+          <select id="versionChannel">
+            <option>Stable</option>
+            <option>Beta</option>
+          </select>
+        </label>
+      </div>
+      <label>Scheduled publish time (optional)
+        <input id="versionPublishAt" type="datetime-local">
       </label>
       <label>Release notes
         <textarea id="versionNotes" maxlength="4000" placeholder="What changed in this version?"></textarea>
@@ -356,13 +461,18 @@
       <button type="button" class="alt" id="exitFiles">Close</button>
     </div>
     <p id="spaceLine" class="small mono"></p>
-    <label>Filter files
-      <select id="fileView">
-        <option value="all">All uploads</option>
-        <option value="used">Attached</option>
-        <option value="unused">Unattached</option>
-      </select>
-    </label>
+    <progress id="storageBar" max="100" value="0"></progress>
+    <p id="storageWarning" class="warning-text" hidden></p>
+    <div class="upload-inline">
+      <label>Filter files
+        <select id="fileView">
+          <option value="all">All uploads</option>
+          <option value="used">Attached</option>
+          <option value="unused">Unattached</option>
+        </select>
+      </label>
+      <button type="button" class="danger" id="cleanupFiles">Clean all unattached files</button>
+    </div>
     <div id="fileRows"></div>
   </dialog>
 

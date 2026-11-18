@@ -42,6 +42,7 @@
       'versionTag',
       'versionNotes',
       'versionChannel',
+      'versionPublishAt',
       'previewVersion',
       'publishVersion',
       'retryVersion',
@@ -74,7 +75,11 @@
               r.is_latest ? ' · Latest' : ''
             }</b><small class="mono">${esc(r.filename)} · ${mib(r.size)} · ${esc(
               new Date(r.published_at).toLocaleDateString()
-            )} · ${esc(r.download_clicks)} downloads</small>` +
+            )}${
+              r.publish_at && new Date(r.publish_at) > new Date()
+                ? " · Scheduled " + new Date(r.publish_at).toLocaleString()
+                : ""
+            } · ${esc(r.download_clicks)} downloads</small>` +
             `<button type="button" class="alt" data-change="${r.id}">Edit release</button>` +
             `<button type="button" class="danger" data-drop="${r.id}">Delete release</button>` +
             `${
@@ -121,9 +126,11 @@
       url: selected.url,
       size: Number(selected.size),
       filename: selected.filename,
+      publish_at: selected.publish_at || null,
     };
     $('versionTag').value = draft.version;
     $('versionNotes').value = draft.notes;
+    $('versionPublishAt').value = toLocalDatetime(selected.publish_at);
     $('versionProgress').value = 100;
     mode();
     status.textContent = `Current APK: ${draft.filename} · ${mib(draft.size)}`;
@@ -168,6 +175,7 @@
     $('versionTitle').textContent = 'Add release · ' + project.title;
     $('versionTag').value = draft.version || '';
     $('versionNotes').value = draft.notes || '';
+    $('versionPublishAt').value = toLocalDatetime(draft.publish_at);
     fileInput.value = '';
     $('retryVersion').hidden = true;
     $('versionProgress').value = draft.url ? 100 : 0;
@@ -357,6 +365,9 @@
     draft.channel = $('versionChannel').value;
     draft.version = $('versionTag').value.trim();
     draft.notes = $('versionNotes').value.trim();
+    draft.publish_at = $('versionPublishAt').value
+      ? new Date($('versionPublishAt').value).toISOString()
+      : null;
     persist();
     lock(true);
 
@@ -430,6 +441,11 @@
 
   function renderFiles() {
     const filter = $('fileView').value;
+    const unattached = inventory.filter((f) => !f.projects.length);
+    $('cleanupFiles').disabled = !unattached.length;
+    $('cleanupFiles').textContent = unattached.length
+      ? `Clean all unattached (${unattached.length})`
+      : 'Clean all unattached files';
     $('fileRows').innerHTML =
       inventory
         .filter((f) => filter === 'all' || (filter === 'used') === !!f.projects.length)
@@ -452,7 +468,17 @@
     try {
       const result = await api('/api/admin/files');
       inventory = result.files;
-      $('spaceLine').textContent = `${mib(result.free)} free of ${mib(result.total)}`;
+      const total = Math.max(1, Number(result.total) || 1);
+      const usedPct = Math.min(100, Math.round(((total - Number(result.free)) / total) * 100));
+      $('spaceLine').textContent = `${mib(result.free)} free of ${mib(result.total)} (${usedPct}% used)`;
+      $('storageBar').value = usedPct;
+      const warn = $('storageWarning');
+      if (usedPct >= 80) {
+        warn.hidden = false;
+        warn.textContent = `Storage volume is ${usedPct}% full. Clean up unattached files or expand volume space.`;
+      } else {
+        warn.hidden = true;
+      }
       renderFiles();
     } catch (e) {
       $('spaceLine').textContent = e.message;
@@ -487,6 +513,21 @@
     }
   };
 
+  $('cleanupFiles').onclick = async () => {
+    const unused = inventory.filter((f) => !f.projects.length);
+    if (!unused.length) return;
+    if (!confirm(`Permanently delete all ${unused.length} unattached files from storage?`)) return;
+    const btn = $('cleanupFiles');
+    btn.disabled = true;
+    try {
+      const res = await api('/api/admin/files/cleanup', 'POST', {});
+      $('spaceLine').textContent = `Removed ${res.deletedCount} files (${mib(res.deletedBytes)} freed).`;
+      await listFiles();
+    } catch (error) {
+      $('spaceLine').textContent = error.message;
+      btn.disabled = false;
+    }
+  };
   $('exitFiles').onclick = () => $('filesDesk').close();
   $('fileView').onchange = renderFiles;
 })();

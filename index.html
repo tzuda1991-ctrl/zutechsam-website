@@ -11,7 +11,11 @@
   <meta property="og:image" content="/agency.webp">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#f8fafc">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="icon" href="/brand.svg" type="image/svg+xml">
+  <script src="/theme.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
@@ -26,6 +30,7 @@
       </a>
       <nav class="navlinks" aria-label="Primary navigation">
         <a href="#projects">Our work</a>
+        <a href="/releases">Releases</a>
         <a href="#services">Services</a>
         <a href="#about">Approach</a>
         <a href="#contact">Contact</a>
@@ -33,6 +38,10 @@
       <a class="pill" href="#contact">Start a project <svg aria-hidden="true" class="glyph"><use href="/icons.svg#external"></use></svg></a>
     </div>
   </header>
+
+  <div id="offlineBanner" class="offline-banner" hidden>
+    <div class="wrap">Offline mode — showing cached studio content. Live forms and APK downloads require connectivity.</div>
+  </div>
 
   <main>
     <section class="agency-hero wrap">
@@ -42,7 +51,7 @@
         <p class="introduction" id="intro">End-to-end web platforms, Android applications, and custom automation tools designed for real users. Try working builds directly from our portfolio.</p>
         <div class="agency-actions">
           <a class="cta" href="#projects">Explore our work <svg class="glyph" aria-hidden="true"><use href="/icons.svg#arrow"></use></svg></a>
-          <a class="talk" href="#about">How we work</a>
+          <a class="talk" href="/releases">Release changelog</a>
         </div>
       </div>
       <figure class="agency-visual">
@@ -178,6 +187,26 @@
       </div>
     </section>
 
+    <section class="section testimonials-band" id="testimonialsSection" hidden>
+      <div class="wrap">
+        <div class="head">
+          <p class="section-kicker">Client feedback</p>
+          <h2>Teams &amp; founders we’ve shipped with</h2>
+        </div>
+        <div class="testimonials-grid" id="testimonialsGrid"></div>
+      </div>
+    </section>
+
+    <section class="section faq-band" id="faqSection" hidden>
+      <div class="wrap">
+        <div class="head">
+          <p class="section-kicker">Questions &amp; answers</p>
+          <h2>Frequently asked questions</h2>
+        </div>
+        <div class="faq-list" id="faqList"></div>
+      </div>
+    </section>
+
     <section class="section" id="contact">
       <div class="wrap">
         <div class="contact">
@@ -229,12 +258,27 @@
       </a>
       <div class="foot-links">
         <a href="#projects">Projects</a>
+        <a href="/releases">Releases</a>
         <a href="#services">Services</a>
         <a href="#contact">Contact</a>
       </div>
-      <span class="copyright">© ZUTECHSAM Software Solutions</span>
+      <div class="foot-actions">
+        <button type="button" class="utility-btn" data-theme-toggle aria-pressed="false">
+          <span data-theme-label>Dark mode</span>
+        </button>
+        <button type="button" class="utility-btn" data-pwa-install hidden>Install app</button>
+        <span class="copyright">© ZUTECHSAM Software Solutions</span>
+      </div>
     </div>
   </footer>
+
+  <dialog id="iosInstallDialog" class="lightbox-dialog ios-dialog">
+    <div class="lightbox-bar">
+      <strong>Install ZUTECHSAM</strong>
+      <button type="button" id="iosInstallClose">Close</button>
+    </div>
+    <p class="ios-steps">To install on iPhone or iPad: tap the <strong>Share</strong> button in Safari, then choose <strong>Add to Home Screen</strong>.</p>
+  </dialog>
 
   <script src="/public.js"></script>
 </body>

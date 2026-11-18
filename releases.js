@@ -17,6 +17,7 @@ export const releaseSchema = `
     UNIQUE(project_id,version)
   );
   ALTER TABLE project_releases ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE project_releases ADD COLUMN IF NOT EXISTS publish_at TIMESTAMPTZ;
   CREATE UNIQUE INDEX IF NOT EXISTS one_latest_release ON project_releases(project_id) WHERE is_latest
 `;
 
@@ -27,15 +28,16 @@ export const publicProjects = `
     COALESCE(r.url, p.apk_url) AS apk_url,
     COALESCE(r.notes, p.release_notes) AS release_notes
   FROM projects p
-  LEFT JOIN project_releases r ON r.project_id=p.id AND r.is_latest
+  LEFT JOIN project_releases r ON r.project_id=p.id AND r.is_latest AND (r.publish_at IS NULL OR r.publish_at <= now())
 `;
 
 const bad = (status, message) => Object.assign(Error(message), { status });
 
-async function history(db, id) {
+async function history(db, id, { includeScheduled = false } = {}) {
+  const filter = includeScheduled ? "" : " AND (publish_at IS NULL OR publish_at <= now())";
   return (
     await db.query(
-      'SELECT * FROM project_releases WHERE project_id=$1 ORDER BY is_latest DESC, published_at DESC, id DESC',
+      `SELECT * FROM project_releases WHERE project_id=$1${filter} ORDER BY is_latest DESC, published_at DESC, id DESC`,
       [id]
     )
   ).rows;
@@ -60,8 +62,9 @@ function parseUploadedApkUrl(rawUrl, reqHost) {
   return { key, normalizedUrl: `/media/${key}` };
 }
 
-export async function releaseView(db, project, preview, origin = '') {
-  const releases = await history(db, project.id);
+export async function releaseView(db, project, preview, origin = '', opts = {}) {
+  const releases = await history(db, project.id, { includeScheduled: !!opts.isDraftPreview });
+  const pageOpts = { preview: !!preview, origin, reviews: opts.reviews || [], draftPreviewToken: opts.draftPreviewToken || "" };
   if (preview) {
     releases.unshift({
       ...preview,
@@ -71,7 +74,7 @@ export async function releaseView(db, project, preview, origin = '') {
   }
   const current = preview || releases.find((r) => r.is_latest);
   if (!releases.length) {
-    return projectPage(project, [], { preview: !!preview, origin });
+    return projectPage(project, [], pageOpts);
   }
   if (project.apk_url && !releases.some((r) => r.url === project.apk_url)) {
     releases.push({
@@ -82,7 +85,7 @@ export async function releaseView(db, project, preview, origin = '') {
   }
   const links = releases.map((r) => ({
     ...r,
-    download: !preview && r.id ? `/projects/${project.id}/releases/${r.id}/download` : r.url,
+    download: !preview && !opts.isDraftPreview && r.id ? `/projects/${project.id}/releases/${r.id}/download` : r.url,
   }));
   const latestDownload = current
     ? links.find((l) => (current.id ? l.id === current.id : l.url === current.url))?.download ||
@@ -97,7 +100,7 @@ export async function releaseView(db, project, preview, origin = '') {
       release_notes: current?.notes || project.release_notes,
     },
     links,
-    { preview: !!preview, origin }
+    pageOpts
   );
 }
 
@@ -143,6 +146,31 @@ export async function releaseApi(path, req, res, { pool, body, send }) {
     send(res, 200, await storageSpace());
     return true;
   }
+  if (path === '/api/admin/files/cleanup' && req.method === 'POST') {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('LOCK TABLE projects,project_releases IN SHARE MODE');
+      const inventory = await storedFiles();
+      const references = await fileReferences(client);
+      let deletedCount = 0;
+      let deletedBytes = 0;
+      for (const file of inventory.files) {
+        if (references.has(file.name)) continue;
+        await deleteStoredFile(file.name);
+        deletedCount += 1;
+        deletedBytes += Number(file.size || 0);
+      }
+      await client.query('COMMIT');
+      send(res, 200, { ok: true, deletedCount, deletedBytes });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    return true;
+  }
 
   if (path.startsWith('/api/admin/files/') && req.method === 'DELETE') {
     const name = path.slice('/api/admin/files/'.length);
@@ -182,7 +210,7 @@ export async function releaseApi(path, req, res, { pool, body, send }) {
 
   const [, id, action] = match;
   if (req.method === 'GET' && !action) {
-    send(res, 200, await history(pool, id));
+    send(res, 200, await history(pool, id, { includeScheduled: true }));
     return true;
   }
 
@@ -253,14 +281,24 @@ export async function releaseApi(path, req, res, { pool, body, send }) {
           filename = String(data.filename).trim();
         }
 
+        let publishAt = current.publish_at;
+        if (data.publish_at !== undefined) {
+          if (!data.publish_at) publishAt = null;
+          else {
+            const dt = new Date(data.publish_at);
+            if (!Number.isFinite(dt.getTime())) throw bad(400, "Invalid publish schedule date.");
+            publishAt = dt.toISOString();
+          }
+        }
         await client.query(
           `UPDATE project_releases
            SET version=$1, notes=$2, url=$3, size=$4, filename=$5, channel=$8,
+               publish_at=$9,
                details=CASE WHEN url=$3 THEN details END,
                is_latest=is_latest AND $8='Stable',
                revision=revision+1
            WHERE project_id=$6 AND id=$7`,
-          [version, notes, url, size, filename, id, action, channel]
+          [version, notes, url, size, filename, id, action, channel, publishAt]
         );
 
         if (current.is_latest && channel === 'Beta') {
@@ -306,6 +344,12 @@ export async function releaseApi(path, req, res, { pool, body, send }) {
         throw bad(400, 'Choose a release channel.');
       }
 
+      let publishAt = null;
+      if (data.publish_at) {
+        const dt = new Date(data.publish_at);
+        if (!Number.isFinite(dt.getTime())) throw bad(400, "Invalid publish schedule date.");
+        publishAt = dt.toISOString();
+      }
       const release = {
         version,
         url: parsed.normalizedUrl,
@@ -313,6 +357,7 @@ export async function releaseApi(path, req, res, { pool, body, send }) {
         notes,
         filename,
         channel,
+        publish_at: publishAt,
       };
 
       if (action === 'preview') {
@@ -331,8 +376,8 @@ export async function releaseApi(path, req, res, { pool, body, send }) {
         } else {
           chosen = (
             await client.query(
-              'INSERT INTO project_releases(project_id,version,url,filename,size,notes,channel) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,channel',
-              [id, version, release.url, filename, data.size, notes, channel]
+              'INSERT INTO project_releases(project_id,version,url,filename,size,notes,channel,publish_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,channel',
+              [id, version, release.url, filename, data.size, notes, channel, release.publish_at]
             )
           ).rows[0];
         }

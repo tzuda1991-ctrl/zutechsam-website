@@ -58,7 +58,7 @@ export const escapeText = (value) =>
 export const snapshot = async (db, id) =>
   (
     await db.query(
-      'SELECT id::text, version, url, filename, size::text, notes, is_latest, published_at, channel FROM project_releases WHERE project_id=$1 ORDER BY id',
+      'SELECT id::text, version, url, filename, size::text, notes, is_latest, published_at, publish_at, channel FROM project_releases WHERE project_id=$1 ORDER BY id',
       [id]
     )
   ).rows;
@@ -114,10 +114,22 @@ export async function sendTelegramAlert(pool, text) {
 
 export async function resolvePublishedProject(pool, key) {
   if (/^\d+$/.test(key)) {
-    const q = await pool.query('SELECT * FROM projects WHERE id=$1 AND published=true', [key]);
+    const q = await pool.query(
+      'SELECT * FROM projects WHERE id=$1 AND published=true AND (publish_at IS NULL OR publish_at <= now())',
+      [key]
+    );
     return q.rows[0] || null;
   }
-  const q = await pool.query('SELECT * FROM projects WHERE slug=$1 AND published=true', [key]);
+  const q = await pool.query(
+    'SELECT * FROM projects WHERE slug=$1 AND published=true AND (publish_at IS NULL OR publish_at <= now())',
+    [key]
+  );
+  return q.rows[0] || null;
+}
+
+export async function resolvePreviewProject(pool, token) {
+  if (!/^[a-f0-9]{32}$/.test(String(token || ""))) return null;
+  const q = await pool.query('SELECT * FROM projects WHERE preview_token=$1', [token]);
   return q.rows[0] || null;
 }
 
@@ -260,8 +272,8 @@ export async function centerApi(pathname, req, res, { pool, body, send, admin })
         );
         for (const r of a.before_state) {
           await db.query(
-            `INSERT INTO project_releases(id,project_id,version,url,filename,size,notes,is_latest,published_at,channel)
-             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            `INSERT INTO project_releases(id,project_id,version,url,filename,size,notes,is_latest,published_at,publish_at,channel)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
              ON CONFLICT(id) DO UPDATE SET
                version=excluded.version,
                url=excluded.url,
@@ -269,6 +281,7 @@ export async function centerApi(pathname, req, res, { pool, body, send, admin })
                size=excluded.size,
                notes=excluded.notes,
                is_latest=excluded.is_latest,
+               publish_at=excluded.publish_at,
                channel=excluded.channel,
                revision=project_releases.revision+1,
                details=CASE WHEN project_releases.url=excluded.url THEN project_releases.details END`,
@@ -282,6 +295,7 @@ export async function centerApi(pathname, req, res, { pool, body, send, admin })
               r.notes,
               r.is_latest,
               r.published_at,
+              r.publish_at || null,
               r.channel,
             ]
           );
@@ -320,7 +334,7 @@ export async function centerApi(pathname, req, res, { pool, body, send, admin })
     const channelFilter = ['Stable', 'Beta'].includes(reqChannel) ? reqChannel : 'Stable';
     const r = (
       await pool.query(
-        'SELECT * FROM project_releases WHERE project_id=$1 AND channel=$2 ORDER BY is_latest DESC, published_at DESC, id DESC LIMIT 1',
+        'SELECT * FROM project_releases WHERE project_id=$1 AND channel=$2 AND (publish_at IS NULL OR publish_at <= now()) ORDER BY is_latest DESC, published_at DESC, id DESC LIMIT 1',
         [id, channelFilter]
       )
     ).rows[0];
@@ -408,7 +422,7 @@ export async function centerApi(pathname, req, res, { pool, body, send, admin })
 
   const rows = (
     await pool.query(
-      'SELECT id,version,notes,published_at,channel FROM project_releases WHERE project_id=$1 ORDER BY published_at DESC,id DESC LIMIT 100',
+      'SELECT id,version,notes,published_at,channel FROM project_releases WHERE project_id=$1 AND (publish_at IS NULL OR publish_at <= now()) ORDER BY published_at DESC,id DESC LIMIT 100',
       [id]
     )
   ).rows;

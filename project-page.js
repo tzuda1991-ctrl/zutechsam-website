@@ -50,12 +50,28 @@ const previewIcons = `<svg xmlns="http://www.w3.org/2000/svg" hidden>
   <symbol id="icon-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4m6-6-6 6 6 6"/></symbol>
 </svg>`;
 
-export const sampleFor = (p) =>
-  p.description?.startsWith('TEST PROJECT:') && Object.hasOwn(samples, p.title)
+export const sampleFor = (p) => {
+  if (p?.demo_html && String(p.demo_html).trim()) {
+    return {
+      name: p.title || 'Interactive demo',
+      description: p.summary || p.description || '',
+      customHtml: String(p.demo_html).trim(),
+    };
+  }
+  return p?.description?.startsWith('TEST PROJECT:') && Object.hasOwn(samples, p.title)
     ? samples[p.title]
     : null;
+};
 
 export function sampleHtml(sample) {
+  if (sample.customHtml) {
+    if (/^\s*<!doctype|^\s*<html/i.test(sample.customHtml)) {
+      return sample.customHtml;
+    }
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(
+      sample.name
+    )}</title><style>*{box-sizing:border-box}body{margin:auto;padding:24px;max-width:680px;font:15px/1.6 system-ui,-apple-system,sans-serif;color:#0f172a;background:#f8fafc}button,input,select,textarea{font:inherit;padding:10px 12px;border-radius:8px;border:1px solid #cbd5e1;max-width:100%}button{background:#1d4ed8;border-color:#1d4ed8;color:#fff;font-weight:600;cursor:pointer}</style></head><body>${sample.customHtml}</body></html>`;
+  }
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(
     sample.name
   )}</title><style>*{box-sizing:border-box}body{margin:auto;padding:24px;max-width:660px;font:15px/1.6 system-ui,-apple-system,sans-serif;color:#0f172a;background:#f8fafc}h1,h2{line-height:1.15;letter-spacing:-0.02em}h1{margin:0 0 8px;font-size:1.5rem}p{color:#475569}button,input,select,textarea{font:inherit;padding:10px 12px;border-radius:8px;border:1px solid #cbd5e1;max-width:100%;background:#fff;color:#0f172a}button{background:#1d4ed8;border-color:#1d4ed8;color:#fff;font-weight:600;cursor:pointer}textarea{width:100%;display:block;margin-bottom:10px;min-height:96px}li{list-style:none;padding:6px 0}ul{padding:0}article{padding:18px;border-radius:10px;color:#fff;margin-top:12px}form{display:flex;flex-wrap:wrap;gap:8px}input:checked+span{text-decoration:line-through}</style></head><body><h1>${esc(
@@ -103,10 +119,29 @@ function videoEmbedHtml(videoUrl) {
   return '';
 }
 
-export function projectPage(p, releases = [], { preview = false, origin = '' } = {}) {
+const pwaHeadLinks =
+  `<meta name="theme-color" content="#f8fafc">` +
+  `<link rel="manifest" href="/manifest.webmanifest">` +
+  `<link rel="apple-touch-icon" href="/apple-touch-icon.png">` +
+  `<link rel="icon" href="/brand.svg" type="image/svg+xml">`;
+
+const publicFooter = ({ preview = false } = {}) =>
+  preview
+    ? ''
+    : `<footer><div class="wrap foot"><a class="logo" href="/"><img class="brand-mark" src="/brand.svg" width="30" height="30" alt=""><span>ZUTECHSAM</span></a><div class="foot-links"><a href="/#projects">Projects</a><a href="/releases">Releases</a><a href="/#services">Services</a><a href="/#contact">Contact</a></div><div class="foot-actions"><button type="button" class="utility-btn" data-theme-toggle aria-pressed="false"><span data-theme-label>Dark mode</span></button><button type="button" class="utility-btn" data-pwa-install hidden>Install app</button><span class="copyright">© ZUTECHSAM Software Solutions</span></div></div></footer><dialog id="iosInstallDialog" class="lightbox-dialog ios-dialog"><div class="lightbox-bar"><strong>Install ZUTECHSAM</strong><button type="button" id="iosInstallClose">Close</button></div><p class="ios-steps">To install on iPhone or iPad: tap the <strong>Share</strong> button in Safari, then choose <strong>Add to Home Screen</strong>.</p></dialog>`;
+
+const offlineNotice = (preview) =>
+  preview
+    ? ''
+    : `<div id="offlineBanner" class="offline-banner" hidden><div class="wrap">Offline mode — showing cached studio content. Live forms and APK downloads require connectivity.</div></div>`;
+
+export function projectPage(
+  p,
+  releases = [],
+  { preview = false, origin = '', reviews = [], draftPreviewToken = '' } = {}
+) {
   const icon = (id) => (preview ? `#icon-${id}` : `/icons.svg#${id}`);
   const slugOrId = p.slug || p.id;
-
   const archive = releases.length
     ? `<h2>APK releases</h2><div class="release-list">${releases
         .map(
@@ -130,7 +165,7 @@ export function projectPage(p, releases = [], { preview = false, origin = '' } =
             )}"><svg aria-hidden="true" class="glyph"><use href="${icon(
               'download'
             )}"></use></svg> Download APK</a>` +
-            (r.id
+            (r.id && !draftPreviewToken
               ? `<a class="release-permalink" href="/projects/${esc(slugOrId)}#release-${r.id}">Release link <svg aria-hidden="true" class="glyph"><use href="${icon(
                   'external'
                 )}"></use></svg></a>`
@@ -139,12 +174,11 @@ export function projectPage(p, releases = [], { preview = false, origin = '' } =
         )
         .join('')}</div>`
     : '';
-
   const sample = sampleFor(p);
+  const demoBase = draftPreviewToken ? `/preview/${esc(draftPreviewToken)}` : `/projects/${p.id}`;
   const image = p.image_url || `/${covers[p.category] || 'studio'}.webp`;
   const absoluteImage = image.startsWith('/') && origin ? `${origin}${image}` : image;
-  const canonicalUrl = origin ? `${origin}/projects/${slugOrId}` : '';
-
+  const canonicalUrl = !draftPreviewToken && origin ? `${origin}/projects/${slugOrId}` : '';
   const files = (p.attachments || []).map((f) => ({
     url: f.size ? formatAttachmentUrl(f.url, f.name) : f.url,
     name: f.name,
@@ -155,17 +189,15 @@ export function projectPage(p, releases = [], { preview = false, origin = '' } =
   }
   if (sample) {
     files.push({
-      url: `/projects/${p.id}/sample.html`,
+      url: `${demoBase}/sample.html`,
       name: 'Download offline demo',
       detail: 'Standalone HTML · opens in a browser',
     });
   }
-
   const links = [
     ['Launch live demo', p.demo_url],
     ['Watch project video', p.video_url],
   ].filter(([, url]) => url);
-
   const gallery = (p.screenshots || [])
     .map(
       (url, i) =>
@@ -176,7 +208,6 @@ export function projectPage(p, releases = [], { preview = false, origin = '' } =
         }" src="${esc(url)}"></a>`
     )
     .join('');
-
   const stackLine = p.tech_stack
     ? `<p class="stack-line mono">${esc(
         String(p.tech_stack)
@@ -186,48 +217,69 @@ export function projectPage(p, releases = [], { preview = false, origin = '' } =
           .join(' · ')
       )}</p>`
     : '';
-
-  const highlights = Array.isArray(p.highlights) && p.highlights.length
-    ? `<h2>Key capabilities</h2><ul class="highlights-list">${p.highlights
-        .map((h) => `<li>${esc(h)}</li>`)
-        .join('')}</ul>`
-    : '';
-
+  const metricsGrid =
+    Array.isArray(p.metrics) && p.metrics.length
+      ? `<div class="impact-metrics">${p.metrics
+          .map(
+            (m) =>
+              `<div class="impact-card"><strong class="mono">${esc(m.value)}</strong><span>${esc(
+                m.label
+              )}</span></div>`
+          )
+          .join('')}</div>`
+      : '';
+  const highlights =
+    Array.isArray(p.highlights) && p.highlights.length
+      ? `<h2>Key capabilities</h2><ul class="highlights-list">${p.highlights
+          .map((h) => `<li>${esc(h)}</li>`)
+          .join('')}</ul>`
+      : '';
   const seoMeta =
+    (draftPreviewToken ? '<meta name="robots" content="noindex, nofollow">' : '') +
     `<meta name="description" content="${esc(p.summary || p.description || p.title)}">` +
     (canonicalUrl ? `<link rel="canonical" href="${esc(canonicalUrl)}">` : '') +
     `<meta property="og:title" content="${esc(p.title)} · ZUTECHSAM">` +
-    `<meta property="og:description" content="${esc(p.summary || p.description || 'Software & app showcase by ZUTECHSAM')}">` +
+    `<meta property="og:description" content="${esc(
+      p.summary || p.description || 'Software & app showcase by ZUTECHSAM'
+    )}">` +
     `<meta property="og:type" content="website">` +
     (canonicalUrl ? `<meta property="og:url" content="${esc(canonicalUrl)}">` : '') +
     `<meta property="og:image" content="${esc(absoluteImage)}">` +
     `<meta name="twitter:card" content="summary_large_image">`;
+  const previewBanner = draftPreviewToken
+    ? `<div class="wrap preview-banner-wrap"><div class="preview-banner">Private client preview · This unlisted build link is hidden from public listings and search engines.</div></div>`
+    : '';
+  const headScripts = preview ? '' : '<script src="/theme.js"></script>';
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(
     p.title
-  )} · ZUTECHSAM</title>${seoMeta}<link rel="icon" href="/brand.svg" type="image/svg+xml"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/public.css"></head><body class="agency detail-page">${
+  )} · ZUTECHSAM</title>${seoMeta}${pwaHeadLinks}${headScripts}<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/public.css"></head><body class="agency detail-page">${
     preview ? previewIcons : ''
-  }<header><div class="wrap nav"><a class="logo" href="/"><img class="brand-mark" src="/brand.svg" width="34" height="34" alt=""><span>ZUTECHSAM</span></a><nav class="navlinks"><a href="/#projects">Our work</a><a href="/#services">Services</a><a href="/#about">Approach</a><a href="/#contact">Contact</a></nav><a class="pill" href="/#projects"><svg aria-hidden="true" class="glyph"><use href="${icon(
+  }<header><div class="wrap nav"><a class="logo" href="/"><img class="brand-mark" src="/brand.svg" width="34" height="34" alt=""><span>ZUTECHSAM</span></a><nav class="navlinks"><a href="/#projects">Our work</a><a href="/releases">Releases</a><a href="/#services">Services</a><a href="/#contact">Contact</a></nav><a class="pill" href="/#projects"><svg aria-hidden="true" class="glyph"><use href="${icon(
     'back'
-  )}"></use></svg> All projects</a></div></header><main class="release wrap"><div class="release-main"><figure class="release-cover-frame"><img class="release-cover" referrerpolicy="no-referrer" src="${esc(
+  )}"></use></svg> All projects</a></div></header>${offlineNotice(preview)}${previewBanner}<main class="release wrap"><div class="release-main"><figure class="release-cover-frame"><img class="release-cover" referrerpolicy="no-referrer" src="${esc(
     image
-  )}" alt="${esc(p.title)} cover"></figure><div class="meta-line">${esc(p.category)} <span aria-hidden="true">·</span> ${
+  )}" alt="${esc(p.title)} cover"></figure><div class="meta-line">${esc(
+    p.category
+  )} <span aria-hidden="true">·</span> ${
     p.version ? esc(p.version) : 'Project overview'
   }</div><h1>${esc(p.title)}</h1>${stackLine}<p class="release-summary">${esc(
     p.summary
-  )}</p><a class="cta release-jump" href="#downloads"><svg aria-hidden="true" class="glyph"><use href="${icon(
+  )}</p>${metricsGrid}<a class="cta release-jump" href="#downloads"><svg aria-hidden="true" class="glyph"><use href="${icon(
     'download'
   )}"></use></svg> Downloads &amp; links</a><h2>About the project</h2><p class="prose">${esc(
-    sample ? sample.description : p.description || p.summary
+    sample && !sample.customHtml ? sample.description : p.description || p.summary
   )}</p>${highlights}${
     sample
       ? `<h2>Interactive sample</h2><iframe class="demo-frame" title="${esc(
           sample.name
-        )}" src="/projects/${p.id}/demo" sandbox="allow-scripts"></iframe>`
+        )}" src="${demoBase}/demo" sandbox="allow-scripts"></iframe>`
       : ''
-  }${videoEmbedHtml(p.video_url)}${archive}${releaseTools(p, releases, { preview })}${
-    gallery ? `<h2>Screenshots</h2><div class="release-gallery">${gallery}</div>` : ''
-  }${
+  }${videoEmbedHtml(p.video_url)}${archive}${releaseTools(p, releases, {
+    preview,
+    reviews,
+    draftPreviewToken,
+  })}${gallery ? `<h2>Screenshots</h2><div class="release-gallery">${gallery}</div>` : ''}${
     p.release_notes ? `<h2>Release notes</h2><p class="prose">${esc(p.release_notes)}</p>` : ''
   }</div><aside class="release-files" id="downloads"><h2>Downloads &amp; links</h2>${files
     .map(
@@ -255,5 +307,43 @@ export function projectPage(p, releases = [], { preview = false, origin = '' } =
       : ''
   }<a class="textlink side-cta" href="/#contact">Discuss a similar project <svg aria-hidden="true" class="glyph"><use href="${icon(
     'external'
-  )}"></use></svg></a></aside></main><dialog id="lightbox" class="lightbox-dialog"><div class="lightbox-bar"><span id="lightboxCount" class="mono"></span><div class="lightbox-actions"><button type="button" id="lightboxPrev">Prev</button><button type="button" id="lightboxNext">Next</button><button type="button" id="lightboxClose">Close</button></div></div><img id="lightboxImg" alt="Project screenshot"></dialog></body></html>`;
+  )}"></use></svg></a></aside></main>${publicFooter({ preview })}<dialog id="lightbox" class="lightbox-dialog"><div class="lightbox-bar"><span id="lightboxCount" class="mono"></span><div class="lightbox-actions"><button type="button" id="lightboxPrev">Prev</button><button type="button" id="lightboxNext">Next</button><button type="button" id="lightboxClose">Close</button></div></div><img id="lightboxImg" alt="Project screenshot"></dialog></body></html>`;
+}
+
+export function releasesPage(items = [], { origin = '' } = {}) {
+  const canonical = origin ? `<link rel="canonical" href="${esc(origin)}/releases">` : '';
+  const listHtml = items.length
+    ? items
+        .map((r) => {
+          const slugOrId = r.project_slug || r.project_id;
+          const projectHref = `/projects/${esc(slugOrId)}`;
+          const dlHref = `/projects/${r.project_id}/releases/${r.id}/download`;
+          const thumb = r.project_image_url || `/${covers[r.project_category] || 'studio'}.webp`;
+          const dt = new Date(r.published_at || r.created_at || Date.now())
+            .toISOString()
+            .slice(0, 10);
+          return (
+            `<article class="changelog-entry" data-channel="${esc(r.channel || 'Stable')}" data-category="${esc(r.project_category)}">` +
+            `<div class="changelog-meta mono"><span>${dt}</span>` +
+            `<span aria-hidden="true">·</span><span>${esc(r.project_category)}</span>` +
+            `<span aria-hidden="true">·</span><span>${esc(r.channel || 'Stable')}</span>` +
+            (r.is_latest ? `<span aria-hidden="true">·</span><span class="latest-mark">Latest</span>` : '') +
+            `</div>` +
+            `<div class="changelog-head">` +
+            `<a class="changelog-thumb-link" href="${projectHref}"><img class="changelog-thumb" loading="lazy" referrerpolicy="no-referrer" src="${esc(thumb)}" alt=""></a>` +
+            `<div><h3><a href="${projectHref}">${esc(r.project_title)}</a> <span class="mono">${esc(r.version)}</span></h3>` +
+            `<small class="mono">${r.size ? `${(Number(r.size) / 1048576).toFixed(1)} MiB` : ''}${r.download_clicks ? ` · ${Number(r.download_clicks)} downloads` : ''}</small></div>` +
+            `</div>` +
+            (r.notes ? `<p class="prose">${esc(r.notes)}</p>` : '') +
+            packageInfo(r) +
+            `<div class="version-actions">` +
+            `<a class="textlink" href="${dlHref}"><svg aria-hidden="true" class="glyph"><use href="/icons.svg#download"></use></svg> Download APK</a>` +
+            `<a class="release-permalink" href="${projectHref}#release-${r.id}">Project page <svg aria-hidden="true" class="glyph"><use href="/icons.svg#external"></use></svg></a>` +
+            `</div></article>`
+          );
+        })
+        .join('')
+    : '<p class="empty">No versioned releases have been published yet.</p>';
+
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Release Changelog · ZUTECHSAM</title><meta name="description" content="Public software changelog, APK builds, and release notes across ZUTECHSAM products.">${canonical}${pwaHeadLinks}<script src="/theme.js"></script><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/public.css"></head><body class="agency detail-page"><header><div class="wrap nav"><a class="logo" href="/"><img class="brand-mark" src="/brand.svg" width="34" height="34" alt=""><span>ZUTECHSAM</span></a><nav class="navlinks"><a href="/#projects">Our work</a><a href="/releases" aria-current="page">Releases</a><a href="/#services">Services</a><a href="/#contact">Contact</a></nav><a class="pill" href="/#contact">Start a project <svg aria-hidden="true" class="glyph"><use href="/icons.svg#external"></use></svg></a></div></header>${offlineNotice(false)}<main class="wrap section"><div class="head"><p class="section-kicker">Release changelog</p><h1>Every shipped build &amp; update</h1><p>Chronological feed of versioned APK releases, beta previews, and SHA-256 verified builds.</p></div><div class="controls-bar"><div class="changelog-filters"><div class="filters" id="channelFilter" role="group" aria-label="Filter by channel"><button type="button" class="filter active" data-val="All" aria-pressed="true">All channels</button><button type="button" class="filter" data-val="Stable" aria-pressed="false">Stable</button><button type="button" class="filter" data-val="Beta" aria-pressed="false">Beta</button></div><select id="changelogCategory" aria-label="Filter by category"><option value="All">All categories</option><option value="Apps">Apps</option><option value="Games">Games</option><option value="AI">AI</option><option value="Websites">Websites</option><option value="Software">Software</option></select></div></div><div id="changelogList" class="changelog-list">${listHtml}</div></main>${publicFooter({ preview: false })}<script defer src="/center-public.js"></script></body></html>`;
 }

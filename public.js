@@ -189,5 +189,36 @@ fetch('/api/studio')
       contactEmail.href = 'mailto:' + data.email;
       contactEmail.textContent = data.email;
     }
+    const tList = Array.isArray(data.testimonials) ? data.testimonials : [];
+    const tSec = $('testimonialsSection');
+    const tGrid = $('testimonialsGrid');
+    if (tSec && tGrid && tList.length) {
+      tSec.hidden = false;
+      tGrid.innerHTML = tList
+        .map((t) => {
+          const n = Math.max(1, Math.min(5, Math.round(Number(t.rating) || 5)));
+          const meta = [t.author_role, t.company].filter(Boolean).join(' · ');
+          return (
+            `<article class="testimonial-card">` +
+            `<div class="mono review-stars" aria-label="${n} out of 5 stars">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</div>` +
+            `<blockquote>${esc(t.quote)}</blockquote>` +
+            `<div class="testimonial-author"><strong>${esc(t.author_name)}</strong>${meta ? `<span>${esc(meta)}</span>` : ''}</div>` +
+            `</article>`
+          );
+        })
+        .join('');
+    }
+    const fList = Array.isArray(data.faqs) ? data.faqs : [];
+    const fSec = $('faqSection');
+    const fGrid = $('faqList');
+    if (fSec && fGrid && fList.length) {
+      fSec.hidden = false;
+      fGrid.innerHTML = fList
+        .map(
+          (f) =>
+            `<details class="faq-item"><summary>${esc(f.question)}</summary><p>${esc(f.answer)}</p></details>`
+        )
+        .join('');
+    }
   })
   .catch(() => {});
