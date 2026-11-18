@@ -12,7 +12,7 @@ import pg from 'pg';
 const port=Number(process.env.PORT||3000),admin=process.env.SITE_MODE==='admin';
 const pool=process.env.DATABASE_URL?new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false}}):null;
 const sessions=new Map();
-const assets = new Map(await Promise.all(['icons.svg','brand.svg','public.css','admin.css','admin.js','public.js','release-admin.js','center-admin.js','center-public.js','studio.webp','campaign.webp','AI.webp','Games.webp','Websites.webp'].map(async name => ['/'+name,await readFile(new URL('./'+name,import.meta.url))])));
+const assets = new Map(await Promise.all(['icons.svg','brand.svg','public.css','admin.css','admin.js','public.js','release-admin.js','center-admin.js','center-public.js','studio.webp','agency.webp','AI.webp','Games.webp','Websites.webp'].map(async name => ['/'+name,await readFile(new URL('./'+name,import.meta.url))])));
 import {directory as uploadDir, apkMB, startUpload, writePart, cleanStaging} from './uploads.js';
 if(admin) setInterval(()=>cleanStaging().catch(console.error),3600000).unref();
 const mediaOrigin=(process.env.MEDIA_BASE_URL||'').replace(/\/$/,'');
@@ -97,7 +97,7 @@ if(path==='/api/studio' && req.method==='GET'){
   const result=await pool.query('SELECT data FROM studio_settings WHERE id=1');
   return send(res,200,result.rows[0]?.data || {});
 }
-if(path==='/api/projects'&&req.method==='GET'){const q=await pool.query(publicProjects+' WHERE p.published=true ORDER BY p.featured DESC,p.created_at DESC LIMIT 500');return send(res,200,q.rows)}
+if(path==='/api/projects'&&req.method==='GET'){const q=await pool.query(publicProjects+' WHERE p.published=true ORDER BY p.featured DESC,p.created_at DESC LIMIT 500');return send(res,200,q.rows.map(p=>({...p,demo_link:p.demo_url||(sampleFor(p)?'/projects/'+p.id+'/demo':null)})))}
 if(path==='/api/enquiries'&&req.method==='POST'&&!admin){const b=await body(req);if(!clean(b.name)||!/^\S+@\S+\.\S+$/.test(clean(b.email))||!clean(b.message)||clean(b.message).length>5000)return send(res,400,{error:'Please provide valid name, email and message'});await pool.query('INSERT INTO enquiries(name,email,service,message) VALUES($1,$2,$3,$4)',[clean(b.name).slice(0,120),clean(b.email).slice(0,200),clean(b.service).slice(0,100),clean(b.message)]);return send(res,201,{ok:true})}
 if(!admin)return send(res,404,{error:'Not found'});
 if(path==='/api/login'&&req.method==='POST'){const b=await body(req);const q=await pool.query('SELECT * FROM admins WHERE username=$1',[clean(b.username)]);const a=q.rows[0];if(!a||!timingSafeEqual(Buffer.from(hash(String(b.password||''),a.salt),'hex'),Buffer.from(a.password_hash,'hex')))return send(res,401,{error:'Invalid credentials'});const t=randomBytes(32).toString('hex');sessions.set(t,{expires:Date.now()+8*3600000});return send(res,200,{token:t})}
