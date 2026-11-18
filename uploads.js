@@ -102,3 +102,8 @@ export async function storedFiles() {
   }
   return {...space,files:files.sort((a,b)=>b.modified-a.modified)};
 }
+
+export async function deleteStoredFile(name){
+  if(!mediaId.test(name))throw fail(400,'Invalid upload name');
+  await rm(path.join(directory,name),{force:true});
+}

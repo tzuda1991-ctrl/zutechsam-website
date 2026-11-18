@@ -27,12 +27,12 @@ function navigate(){
 }
 window.onhashchange=navigate;
 function clearEditor(){
-  editing=null;form.reset();attached=[];failedSelections.clear();showFiles();$('editorTitle').textContent='Add project';$('projectMsg').textContent='';
+  editing=null;$('editorReleases').hidden=true;form.reset();attached=[];failedSelections.clear();showFiles();$('editorTitle').textContent='Add project';$('projectMsg').textContent='';
   $('progress').hidden=true;$('uploadStatus').textContent='';
 }
 const coverFor=p=>p.image_url||({Games:'/Games.webp',AI:'/AI.webp',Websites:'/Websites.webp',Software:'/Websites.webp'}[p.category]||'/studio.webp');
 function projectRow(p){
-  return '<div class="row project-row"><img alt="" class="thumb" src="'+esc(coverFor(p))+'"><div><strong>'+esc(p.title)+'</strong><div class="small">'+esc(p.category)+' · '+(p.published?'Published':'Draft')+(p.featured?' · Featured':'')+' · '+p.file_count+' '+(p.file_count===1?'file':'files')+' · '+p.release_count+' '+(p.release_count===1?'release':'releases')+'</div></div><div><button data-release="'+p.id+'">Add release</button><button class="alt" data-edit="'+p.id+'">Edit</button><button class="alt" data-copy="'+p.id+'">Duplicate</button><button class="danger" data-remove="'+p.id+'">Delete</button></div></div>';
+  return '<div class="row project-row"><img alt="" class="thumb" src="'+esc(coverFor(p))+'"><div><strong>'+esc(p.title)+'</strong><div class="small">'+esc(p.category)+' · '+(p.published?'Published':'Draft')+(p.featured?' · Featured':'')+' · '+p.file_count+' '+(p.file_count===1?'file':'files')+' · '+p.release_count+' '+(p.release_count===1?'release':'releases')+'</div></div><div><button data-release="'+p.id+'">'+(p.release_count?'Manage releases':'Add release')+'</button><button class="alt" data-edit="'+p.id+'">Edit</button><button class="alt" data-copy="'+p.id+'">Duplicate</button><button class="danger" data-remove="'+p.id+'">Delete project</button></div></div>';
 }
 function render(){
   renderWeek();
