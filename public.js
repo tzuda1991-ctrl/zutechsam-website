@@ -57,7 +57,9 @@ function render() {
           : availability === 'demo_url'
             ? p.demo_link
             : p[availability])) &&
-      `${p.title} ${p.summary} ${p.category}`.toLowerCase().includes(query)
+      `${p.title} ${p.summary} ${p.category} ${p.tech_stack || ''}`
+        .toLowerCase()
+        .includes(query)
   );
 
   if ($('sortBy').value === 'title') {
@@ -71,12 +73,13 @@ function render() {
     list
       .map((p) => {
         const selected = saved.has(String(p.id));
+        const href = `/projects/${esc(p.slug || p.id)}`;
         const demo = p.demo_link
           ? `<a class="demo-action" href="${esc(p.demo_link)}" target="_blank" rel="noopener">Try demo <svg class="glyph" aria-hidden="true"><use href="/icons.svg#external"></use></svg></a>`
           : '';
         return (
           `<article class="card project-card">` +
-          `<a class="art-wrap" href="/projects/${p.id}" aria-label="Open ${esc(p.title)}">` +
+          `<a class="art-wrap" href="${href}" aria-label="Open ${esc(p.title)}">` +
           `<img class="art" loading="lazy" referrerpolicy="no-referrer" alt="${esc(p.title)} preview" src="${esc(image(p))}">` +
           `</a>` +
           `<button type="button" class="fav" data-save="${p.id}" aria-label="Save ${esc(p.title)}" aria-pressed="${selected}">` +
@@ -87,7 +90,7 @@ function render() {
           }</div>` +
           `<h3>${esc(p.title)}</h3>` +
           `<p>${esc(p.summary)}</p>` +
-          `<div class="work-actions">${demo}<a class="textlink" href="/projects/${p.id}">Project details <svg aria-hidden="true" class="glyph"><use href="/icons.svg#external"></use></svg></a></div>` +
+          `<div class="work-actions">${demo}<a class="textlink" href="${href}">Project details <svg aria-hidden="true" class="glyph"><use href="/icons.svg#external"></use></svg></a></div>` +
           `</div></article>`
         );
       })

@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>ZUTECHSAM — Web &amp; Mobile App Development Studio</title>
   <meta name="description" content="ZUTECHSAM builds custom websites, Android apps, and business software. Explore live interactive demos and discuss your next digital product.">
+  <meta property="og:title" content="ZUTECHSAM — Web &amp; Mobile App Development Studio">
+  <meta property="og:description" content="End-to-end web platforms, Android applications, and custom automation tools built for real users.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/agency.webp">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="theme-color" content="#f8fafc">
   <link rel="icon" href="/brand.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -191,13 +196,22 @@
               <input name="name" aria-label="Your name" placeholder="Your name" required maxlength="120">
               <input name="email" aria-label="Email address" type="email" placeholder="Email address" required>
             </div>
-            <select name="service" aria-label="Service">
-              <option>Android App</option>
-              <option>Game Development</option>
-              <option>AI &amp; Automation</option>
-              <option>Website</option>
-              <option>Custom Software</option>
-            </select>
+            <div class="form-row">
+              <select name="service" aria-label="Service">
+                <option>Android App</option>
+                <option>Game Development</option>
+                <option>AI &amp; Automation</option>
+                <option>Website</option>
+                <option>Custom Software</option>
+              </select>
+              <select name="budget" aria-label="Estimated budget">
+                <option value="">Budget range (optional)</option>
+                <option>Under $500</option>
+                <option>$500 – $2,000</option>
+                <option>$2,000 – $5,000</option>
+                <option>$5,000+</option>
+              </select>
+            </div>
             <textarea aria-label="Project requirements" name="message" placeholder="Tell us about your project, goals, and timeline..." required maxlength="5000"></textarea>
             <button class="cta">Send enquiry <svg aria-hidden="true" class="glyph"><use href="/icons.svg#send"></use></svg></button>
             <div class="status" id="formStatus" role="status"></div>

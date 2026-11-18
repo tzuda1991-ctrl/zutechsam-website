@@ -48,7 +48,7 @@
         <a href="#settings">Website settings</a>
       </nav>
       <div class="aside-tools">
-        <button type="button" class="alt" id="centerButton">Release activity &amp; reports</button>
+        <button type="button" class="alt" id="centerButton">Analytics, reports &amp; activity</button>
         <button type="button" class="alt" id="storageButton">File manager</button>
         <button type="button" id="logout" class="alt">Sign out</button>
       </div>
@@ -126,12 +126,25 @@
               </label>
             </div>
 
-            <label>Release version
-              <input name="version" maxlength="60" placeholder="e.g. 1.2.0">
+            <div class="grid">
+              <label>URL Slug (optional)
+                <input name="slug" maxlength="80" placeholder="auto-generated from title">
+              </label>
+              <label>Release version
+                <input name="version" maxlength="60" placeholder="e.g. 1.2.0">
+              </label>
+            </div>
+
+            <label>Tech stack (comma or · separated)
+              <input name="tech_stack" maxlength="240" placeholder="e.g. Kotlin, Jetpack Compose, PostgreSQL">
             </label>
 
             <label>Short Summary
               <input name="summary" maxlength="400">
+            </label>
+
+            <label>Key highlights (up to 8 lines, one per line)
+              <textarea name="highlights" rows="3" placeholder="Offline mode&#10;Signed APK updates&#10;Real-time sync"></textarea>
             </label>
 
             <label>Release notes
@@ -152,7 +165,7 @@
               <label>APK URL
                 <input name="apk_url" placeholder="https:// or /media/...">
               </label>
-              <label>Video HTTPS URL
+              <label>Video HTTPS URL (YouTube or MP4)
                 <input name="video_url" type="url" placeholder="https://">
               </label>
             </div>
@@ -222,13 +235,17 @@
       </section>
 
       <section id="enquiries">
-        <h1>Enquiry inbox</h1>
+        <div class="panel-head">
+          <h1>Enquiry inbox</h1>
+          <button type="button" class="alt" id="exportCsv">Export CSV</button>
+        </div>
         <div class="tools">
           <input id="findMail" placeholder="Search enquiries" aria-label="Search enquiries">
           <select id="mailStatus" aria-label="Enquiry status">
             <option>All enquiries</option>
             <option>new</option>
             <option>contacted</option>
+            <option>quoted</option>
             <option>closed</option>
           </select>
         </div>
@@ -236,8 +253,10 @@
       </section>
 
       <section id="settings">
-        <h1>Website settings</h1>
+        <h1>Website &amp; studio settings</h1>
+
         <form class="panel" id="settingsForm">
+          <h2>Public copy &amp; Telegram alerts</h2>
           <label>Homepage headline
             <input maxlength="90" name="headline" placeholder="Software built to ship &amp; scale.">
           </label>
@@ -247,8 +266,40 @@
           <label>Contact email
             <input name="email" type="email" placeholder="zutechsam@gmail.com">
           </label>
-          <button type="submit">Save website settings</button>
+          <div class="grid">
+            <label>Telegram Bot Token (leave blank to keep saved token)
+              <input name="telegram_bot_token" type="password" autocomplete="off" placeholder="123456:ABC-DEF...">
+            </label>
+            <label>Telegram Chat ID
+              <input name="telegram_chat_id" placeholder="e.g. 987654321 or -100...">
+            </label>
+          </div>
+          <p class="small" id="telegramState"></p>
+          <div class="form-actions">
+            <button type="submit">Save website settings</button>
+            <button type="button" class="alt" id="testTelegram">Send test Telegram alert</button>
+          </div>
         </form>
+
+        <form class="panel" id="passwordForm">
+          <h2>Change administrator password</h2>
+          <div class="grid">
+            <label>Current password
+              <input name="currentPassword" type="password" required autocomplete="current-password">
+            </label>
+            <label>New password (min 8 characters)
+              <input name="newPassword" type="password" required minlength="8" maxlength="128" autocomplete="new-password">
+            </label>
+          </div>
+          <button type="submit">Update password</button>
+          <p class="small" id="passwordMsg" role="status"></p>
+        </form>
+
+        <div class="panel">
+          <h2>Studio backup</h2>
+          <p class="small">Download a complete JSON snapshot of projects, release records, studio settings, and enquiries.</p>
+          <button type="button" class="alt" id="exportBackup">Download JSON backup</button>
+        </div>
       </section>
     </main>
   </div>
@@ -317,8 +368,8 @@
 
   <dialog id="centerDialog">
     <div class="dialog-head">
-      <h2>Release activity &amp; reports</h2>
-      <button type="button" id="centerClose" class="alt">Close</button>
+      <h2>Analytics, reports &amp; release activity</h2>
+      <button type="button" class="alt" id="centerClose">Close</button>
     </div>
     <p id="centerStatus" role="status" class="small"></p>
     <div id="centerContent"></div>

@@ -60,7 +60,7 @@ function parseUploadedApkUrl(rawUrl, reqHost) {
   return { key, normalizedUrl: `/media/${key}` };
 }
 
-export async function releaseView(db, project, preview) {
+export async function releaseView(db, project, preview, origin = '') {
   const releases = await history(db, project.id);
   if (preview) {
     releases.unshift({
@@ -71,7 +71,7 @@ export async function releaseView(db, project, preview) {
   }
   const current = preview || releases.find((r) => r.is_latest);
   if (!releases.length) {
-    return projectPage(project, [], { preview: !!preview });
+    return projectPage(project, [], { preview: !!preview, origin });
   }
   if (project.apk_url && !releases.some((r) => r.url === project.apk_url)) {
     releases.push({
@@ -97,7 +97,7 @@ export async function releaseView(db, project, preview) {
       release_notes: current?.notes || project.release_notes,
     },
     links,
-    { preview: !!preview }
+    { preview: !!preview, origin }
   );
 }
 

@@ -9,13 +9,12 @@ The public portfolio and the studio admin run as two services from the same bran
 | `UPLOAD_DIR` | — | `/data/uploads` (default), on a persistent volume |
 | `APK_MAX_MB` | — | `1024` by default, configurable from `1` to `16384` MiB |
 | `MEDIA_BASE_URL` | HTTPS origin of the admin service for `/media/*` links | — |
-| `PUBLIC_BASE_URL` | Optional canonical origin for QR codes & Atom feeds | Optional |
+| `PUBLIC_BASE_URL` | Optional canonical origin for SEO, sitemap, QR codes & Atom feeds | Optional |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Optional instant alerts for enquiries & bug reports | Optional |
 
-## Architecture & Highlights
+## Key Capabilities
 
-- **Resumable chunked uploads**: Files upload in 4 MiB chunks with SHA-256 content fingerprinting and magic-byte verification, supporting pause/resume across retries.
-- **Range downloads & media routing**: Uploaded assets are stored with relative `/media/<hash>.<ext>` paths and support HTTP `Range` requests (`206 Partial Content`).
-- **Release management**: Supports `Stable` and `Beta` channels, optimistic concurrency (`revision`), automatic APK manifest & SHA-256 indexing, live sandboxed preview, and activity undo.
-- **Security**: PostgreSQL-backed admin sessions with expiry pruning, scrypt password hashing, IP rate-limiting on login and enquiries, CSP headers, and HTML output escaping.
-
-Use **Website settings** in the studio workspace to update the homepage headline, introduction, and contact email. Each published project has a canonical page at `/projects/<id>` (with `#project-<id>` redirect support).
+- **Portfolio & SEO**: Custom project slugs (`/projects/<slug>`), dynamic OpenGraph social cards, `sitemap.xml`, `robots.txt`, embedded video previews, and screenshot lightbox.
+- **APK Release Hub**: Versioned `Stable`/`Beta` channels, automatic APK manifest & SHA-256 indexing, one-click SHA-256 copy, HTTP `Range` downloads, and `/projects/<slug>/latest.json` in-app update API.
+- **Resumable Chunked Uploads**: 4 MiB chunks with SHA-256 content fingerprinting and magic-byte verification.
+- **Studio Desk & Analytics**: 7-day enquiry & download charts, CRM notes/budget/CSV export, Telegram alert testing, admin password rotation, and JSON backup export.

@@ -34,7 +34,14 @@ export const centerSchema = `
     source text,
     visits bigint DEFAULT 1,
     PRIMARY KEY(project_id,source)
-  )
+  );
+  CREATE TABLE IF NOT EXISTS download_events(
+    id bigserial PRIMARY KEY,
+    project_id bigint REFERENCES projects ON DELETE CASCADE,
+    release_id bigint REFERENCES project_releases ON DELETE CASCADE,
+    created_at timestamptz NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS download_events_time_idx ON download_events(created_at)
 `;
 
 const fail = (status, message) => Object.assign(Error(message), { status });
@@ -64,12 +71,54 @@ export function getOrigin(req) {
   const safeHost = /^[a-zA-Z0-9.-]+(?::\d{1,5})?$/.test(rawHost) ? rawHost : 'localhost:3000';
   const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
   const isLocal = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(safeHost);
-  const proto = forwardedProto === 'http' || forwardedProto === 'https'
-    ? forwardedProto
-    : isLocal
-      ? 'http'
-      : 'https';
+  const proto =
+    forwardedProto === 'http' || forwardedProto === 'https'
+      ? forwardedProto
+      : isLocal
+        ? 'http'
+        : 'https';
   return `${proto}://${safeHost}`;
+}
+
+export async function sendTelegramAlert(pool, text) {
+  try {
+    let botToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+    let chatId = (process.env.TELEGRAM_CHAT_ID || '').trim();
+    if ((!botToken || !chatId) && pool) {
+      const q = await pool.query('SELECT data FROM studio_settings WHERE id=1');
+      const d = q.rows[0]?.data || {};
+      if (!botToken) botToken = String(d.telegram_bot_token || '').trim();
+      if (!chatId) chatId = String(d.telegram_chat_id || '').trim();
+    }
+    if (!botToken || !chatId) return { sent: false, reason: 'not_configured' };
+
+    const res = await fetch(`https://api.telegram.org/bot${encodeURIComponent(botToken)}/sendMessage`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: String(text).slice(0, 3900),
+        disable_web_page_preview: true,
+      }),
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!res.ok) {
+      const err = await res.text().catch(() => '');
+      return { sent: false, reason: err || `HTTP ${res.status}` };
+    }
+    return { sent: true };
+  } catch (err) {
+    return { sent: false, reason: err.message };
+  }
+}
+
+export async function resolvePublishedProject(pool, key) {
+  if (/^\d+$/.test(key)) {
+    const q = await pool.query('SELECT * FROM projects WHERE id=$1 AND published=true', [key]);
+    return q.rows[0] || null;
+  }
+  const q = await pool.query('SELECT * FROM projects WHERE slug=$1 AND published=true', [key]);
+  return q.rows[0] || null;
 }
 
 export async function indexPackages(db) {
@@ -135,7 +184,7 @@ export async function centerApi(pathname, req, res, { pool, body, send, admin })
   if (admin) {
     if (pathname === '/api/admin/center' && req.method === 'GET') {
       const query = (sql) => pool.query(sql).then((q) => q.rows);
-      const [reports, activity, visits] = await Promise.all([
+      const [reports, activity, visits, downloadsDaily, topProjects] = await Promise.all([
         query(
           'SELECT r.id,r.version,r.message,r.resolved,r.created_at,p.title,(r.screenshot IS NOT NULL) AS image FROM release_reports r JOIN projects p ON p.id=r.project_id ORDER BY r.id DESC LIMIT 150'
         ),
@@ -145,8 +194,14 @@ export async function centerApi(pathname, req, res, { pool, body, send, admin })
         query(
           'SELECT p.title,v.source,v.visits FROM project_visits v JOIN projects p ON p.id=v.project_id ORDER BY v.visits DESC'
         ),
+        query(
+          "SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS day, count(*)::int AS count FROM download_events WHERE created_at >= now() - interval '14 days' GROUP BY 1 ORDER BY 1"
+        ),
+        query(
+          'SELECT p.id, p.title, COALESCE(SUM(r.download_clicks),0)::int AS downloads, COALESCE((SELECT SUM(v.visits) FROM project_visits v WHERE v.project_id=p.id),0)::int AS visits FROM projects p LEFT JOIN project_releases r ON r.project_id=p.id GROUP BY p.id ORDER BY downloads DESC, visits DESC LIMIT 8'
+        ),
       ]);
-      send(res, 200, { reports, activity, visits });
+      send(res, 200, { reports, activity, visits, downloadsDaily, topProjects });
       return true;
     }
 
@@ -245,15 +300,50 @@ export async function centerApi(pathname, req, res, { pool, body, send, admin })
     return false;
   }
 
-  const match = pathname.match(/^\/projects\/(\d+)\/(youtube|qr|qr.png|updates.atom|reports)$/);
+  const match = pathname.match(
+    /^\/projects\/([a-zA-Z0-9-]+)\/(youtube|qr|qr\.png|updates\.atom|reports|latest\.json)$/
+  );
   if (!match) return false;
 
-  const [, id, action] = match;
-  const p = (await pool.query('SELECT title FROM projects WHERE id=$1 AND published', [id])).rows[0];
+  const [, key, action] = match;
+  const p = await resolvePublishedProject(pool, key);
   if (!p) throw fail(404, 'Project unavailable');
 
+  const id = p.id;
+  const slugOrId = p.slug || String(p.id);
   const origin = getOrigin(req);
-  const base = `${origin}/projects/${id}`;
+  const base = `${origin}/projects/${slugOrId}`;
+
+  if (action === 'latest.json' && req.method === 'GET') {
+    const reqUrl = new URL(req.url, 'http://localhost');
+    const reqChannel = reqUrl.searchParams.get('channel') || 'Stable';
+    const channelFilter = ['Stable', 'Beta'].includes(reqChannel) ? reqChannel : 'Stable';
+    const r = (
+      await pool.query(
+        'SELECT * FROM project_releases WHERE project_id=$1 AND channel=$2 ORDER BY is_latest DESC, published_at DESC, id DESC LIMIT 1',
+        [id, channelFilter]
+      )
+    ).rows[0];
+    if (!r) return send(res, 404, { error: `No ${channelFilter} release available` });
+    const details = r.details || {};
+    send(res, 200, {
+      projectId: Number(id),
+      slug: p.slug || null,
+      title: p.title,
+      channel: r.channel,
+      version: r.version,
+      versionCode: details.build ?? null,
+      package: details.package ?? null,
+      minSdk: details.minSdk ?? null,
+      targetSdk: details.targetSdk ?? null,
+      sha256: details.sha256 ?? null,
+      size: Number(r.size),
+      publishedAt: r.published_at,
+      releaseNotes: r.notes,
+      downloadUrl: `${origin}/projects/${id}/releases/${r.id}/download`,
+    });
+    return true;
+  }
 
   if (action === 'reports' && req.method === 'POST') {
     const data = await body(req);
@@ -281,10 +371,16 @@ export async function centerApi(pathname, req, res, { pool, body, send, admin })
     }
 
     const q = await pool.query(
-      'INSERT INTO release_reports(project_id,version,message,screenshot) SELECT project_id,version,$3,$4 FROM project_releases WHERE project_id=$1 AND id=$2 RETURNING id',
+      'INSERT INTO release_reports(project_id,version,message,screenshot) SELECT project_id,version,$3,$4 FROM project_releases WHERE project_id=$1 AND id=$2 RETURNING id, version',
       [id, /^\d+$/.test(data.release) ? data.release : '0', message, shot]
     );
     if (!q.rowCount) throw fail(404, 'Release unavailable');
+
+    sendTelegramAlert(
+      pool,
+      `New bug report #${q.rows[0].id}\nProject: ${p.title}\nVersion: ${q.rows[0].version}\nMessage: ${message}`
+    ).catch(() => {});
+
     send(res, 201, { id: q.rows[0].id });
     return true;
   }
@@ -296,7 +392,7 @@ export async function centerApi(pathname, req, res, { pool, body, send, admin })
       'INSERT INTO project_visits(project_id,source) VALUES($1,$2) ON CONFLICT(project_id,source) DO UPDATE SET visits=project_visits.visits+1',
       [id, action]
     );
-    res.writeHead(302, { location: `/projects/${id}`, 'cache-control': 'no-store' });
+    res.writeHead(302, { location: `/projects/${slugOrId}`, 'cache-control': 'no-store' });
     res.end();
     return true;
   }

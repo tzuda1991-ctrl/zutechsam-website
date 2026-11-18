@@ -50,11 +50,13 @@ async function api(url, method = 'GET', data) {
   return result;
 }
 
-const screenshotUrls = () =>
-  form.elements.screenshots.value
+const linesOf = (value) =>
+  String(value || '')
     .split('\n')
     .map((u) => u.trim())
     .filter(Boolean);
+
+const screenshotUrls = () => linesOf(form.elements.screenshots.value);
 
 function navigate() {
   const route = location.hash.slice(1);
@@ -101,7 +103,7 @@ function projectRow(p) {
       p.featured ? ' · Featured' : ''
     } · ${p.file_count} ${p.file_count === 1 ? 'file' : 'files'} · ${p.release_count} ${
       p.release_count === 1 ? 'release' : 'releases'
-    }</div></div>` +
+    } · ${p.downloads_total || 0} downloads</div></div>` +
     `<div class="row-actions">` +
     `<button type="button" data-release="${p.id}">${p.release_count ? 'Manage releases' : 'Add release'}</button>` +
     `<button type="button" class="alt" data-edit="${p.id}">Edit</button>` +
@@ -136,10 +138,11 @@ function renderWeek() {
 
 function render() {
   renderWeek();
+  const totalDownloads = projects.reduce((sum, p) => sum + Number(p.downloads_total || 0), 0);
   const metrics = [
     ['Total projects', projects.length],
     ['Published', projects.filter((p) => p.published).length],
-    ['Drafts', projects.filter((p) => !p.published).length],
+    ['APK downloads', totalDownloads],
     ['New enquiries', enquiries.filter((e) => e.status === 'new').length],
   ];
   $('metrics').innerHTML = metrics
@@ -153,7 +156,9 @@ function render() {
     projects
       .filter(
         (p) =>
-          (p.title + ' ' + p.category).toLowerCase().includes($('search').value.toLowerCase()) &&
+          (p.title + ' ' + p.category + ' ' + (p.slug || ''))
+            .toLowerCase()
+            .includes($('search').value.toLowerCase()) &&
           (status === 'All projects' ||
             (status === 'Published' && p.published) ||
             (status === 'Draft' && !p.published) ||
@@ -166,17 +171,24 @@ function render() {
     enquiries
       .filter(
         (e) =>
-          (e.name + ' ' + e.email + ' ' + e.message + ' ' + e.service)
+          (e.name + ' ' + e.email + ' ' + e.message + ' ' + e.service + ' ' + (e.notes || ''))
             .toLowerCase()
             .includes($('findMail').value.toLowerCase()) &&
           ($('mailStatus').value === 'All enquiries' || e.status === $('mailStatus').value)
       )
       .map(
         (e) =>
-          `<article class="row"><div><strong>${esc(e.name)}</strong> · ${esc(e.service)}` +
+          `<article class="row enquiry-row"><div><strong>${esc(e.name)}</strong> · ${esc(e.service)}${
+            e.budget ? ` · <span class="mono">${esc(e.budget)}</span>` : ''
+          }` +
           `<div class="small mono">${esc(e.email)} · ${new Date(e.created_at).toLocaleDateString()}</div>` +
-          `<p>${esc(e.message)}</p></div>` +
-          `<select aria-label="Enquiry status" data-id="${e.id}">${['new', 'contacted', 'closed']
+          `<p>${esc(e.message)}</p>` +
+          `<div class="crm-notes"><input type="text" class="note-input" data-note-for="${e.id}" value="${esc(
+            e.notes || ''
+          )}" placeholder="Internal CRM notes…" maxlength="2000">` +
+          `<button type="button" class="alt" data-save-note="${e.id}">Save note</button></div>` +
+          `</div>` +
+          `<select aria-label="Enquiry status" data-id="${e.id}">${['new', 'contacted', 'quoted', 'closed']
             .map((s) => `<option ${s === e.status ? 'selected' : ''}>${s}</option>`)
             .join('')}</select></article>`
       )
@@ -187,16 +199,20 @@ async function load() {
   const [p, e, settings, config] = await Promise.all([
     api('/api/admin/projects'),
     api('/api/admin/enquiries'),
-    api('/api/studio'),
+    api('/api/admin/studio'),
     api('/api/admin/uploads'),
   ]);
   projects = p;
   enquiries = e;
   limits = config;
   $('apkLimit').textContent = config.apkMB;
-  for (const key of ['headline', 'intro', 'email']) {
+  for (const key of ['headline', 'intro', 'email', 'telegram_chat_id']) {
     $('settingsForm').elements[key].value = settings[key] || '';
   }
+  $('settingsForm').elements.telegram_bot_token.value = '';
+  $('telegramState').textContent = settings.has_telegram_token
+    ? 'A Telegram Bot Token is saved. Leave the token field blank to keep it.'
+    : 'Configure a Bot Token and Chat ID (or set TELEGRAM_BOT_TOKEN env var) to receive instant enquiry & bug alerts.';
   render();
   navigate();
   signedIn(true);
@@ -253,7 +269,9 @@ async function projectAction(event) {
     for (const key of [
       'title',
       'category',
+      'slug',
       'version',
+      'tech_stack',
       'summary',
       'description',
       'release_notes',
@@ -270,8 +288,10 @@ async function projectAction(event) {
     attached = (project.attachments || []).map((f) => ({ ...f }));
     showFiles();
     form.elements.screenshots.value = (project.screenshots || []).join('\n');
+    form.elements.highlights.value = (project.highlights || []).join('\n');
     if (copy) {
       form.elements.title.value = (project.title + ' (copy)').slice(0, 150);
+      form.elements.slug.value = '';
       form.elements.published.checked = false;
       form.elements.featured.checked = false;
     }
@@ -291,6 +311,7 @@ async function projectAction(event) {
 $('recent').onclick = $('list').onclick = projectAction;
 
 $('inbox').onchange = async ({ target }) => {
+  if (!target.dataset.id) return;
   const enquiry = enquiries.find((e) => String(e.id) === target.dataset.id);
   if (!enquiry) return;
   try {
@@ -301,6 +322,52 @@ $('inbox').onchange = async ({ target }) => {
     target.value = enquiry.status;
     $('notice').textContent = error.message;
   }
+};
+
+$('inbox').onclick = async ({ target }) => {
+  const id = target.dataset.saveNote;
+  if (!id) return;
+  const enquiry = enquiries.find((e) => String(e.id) === id);
+  const input = $('inbox').querySelector(`[data-note-for="${id}"]`);
+  if (!enquiry || !input) return;
+  target.disabled = true;
+  try {
+    await api('/api/admin/enquiries/' + id, 'PATCH', { notes: input.value });
+    enquiry.notes = input.value;
+    $('notice').textContent = 'Enquiry note saved.';
+  } catch (error) {
+    $('notice').textContent = error.message;
+  } finally {
+    target.disabled = false;
+  }
+};
+
+$('exportCsv').onclick = () => {
+  const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = [
+    ['ID', 'Date', 'Name', 'Email', 'Service', 'Budget', 'Status', 'Message', 'Notes'].join(','),
+    ...enquiries.map((e) =>
+      [
+        e.id,
+        new Date(e.created_at).toISOString(),
+        e.name,
+        e.email,
+        e.service,
+        e.budget || '',
+        e.status,
+        e.message,
+        e.notes || '',
+      ]
+        .map(csvCell)
+        .join(',')
+    ),
+  ];
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `zutechsam-enquiries-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 };
 
 form.onsubmit = async (event) => {
@@ -314,6 +381,7 @@ form.onsubmit = async (event) => {
   const data = Object.fromEntries(new FormData(form));
   data.attachments = attached;
   data.screenshots = screenshotUrls();
+  data.highlights = linesOf(form.elements.highlights.value).slice(0, 8);
   for (const key of ['featured', 'published']) {
     data[key] = form.elements[key].checked;
   }
@@ -340,10 +408,61 @@ form.onsubmit = async (event) => {
 $('settingsForm').onsubmit = async (event) => {
   event.preventDefault();
   try {
-    await api('/api/admin/studio', 'PUT', Object.fromEntries(new FormData(event.target)));
+    const res = await api('/api/admin/studio', 'PUT', Object.fromEntries(new FormData(event.target)));
+    event.target.elements.telegram_bot_token.value = '';
+    $('telegramState').textContent = res.has_telegram_token
+      ? 'A Telegram Bot Token is saved. Leave the token field blank to keep it.'
+      : 'No Telegram Bot Token saved.';
     $('notice').textContent = 'Website settings saved.';
   } catch (error) {
     $('notice').textContent = error.message;
+  }
+};
+
+$('testTelegram').onclick = async () => {
+  const btn = $('testTelegram');
+  btn.disabled = true;
+  try {
+    await api('/api/admin/telegram-test', 'POST', {});
+    $('notice').textContent = 'Test Telegram alert sent.';
+  } catch (error) {
+    $('notice').textContent = error.message;
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+$('passwordForm').onsubmit = async (event) => {
+  event.preventDefault();
+  const msg = $('passwordMsg');
+  msg.textContent = '';
+  try {
+    await api('/api/admin/password', 'POST', Object.fromEntries(new FormData(event.target)));
+    event.target.reset();
+    msg.textContent = 'Administrator password updated.';
+  } catch (error) {
+    msg.textContent = error.message;
+  }
+};
+
+$('exportBackup').onclick = async () => {
+  const btn = $('exportBackup');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/admin/backup', {
+      headers: { authorization: 'Bearer ' + token },
+    });
+    if (!res.ok) throw new Error('Backup download failed');
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `zutechsam-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (error) {
+    $('notice').textContent = error.message;
+  } finally {
+    btn.disabled = false;
   }
 };
 

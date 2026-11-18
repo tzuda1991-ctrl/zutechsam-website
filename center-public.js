@@ -13,6 +13,17 @@
     show();
   });
 
+  document.addEventListener('click', async (e) => {
+    const copyBtn = e.target.closest('.copy-sha');
+    if (!copyBtn) return;
+    try {
+      await navigator.clipboard.writeText(copyBtn.dataset.copy || '');
+      const prev = copyBtn.textContent;
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => (copyBtn.textContent = prev), 1500);
+    } catch {}
+  });
+
   const link = document.getElementById('campaignLink');
   if (link) {
     link.value = location.origin + location.pathname.replace(/\/$/, '') + '/youtube';
@@ -24,6 +35,36 @@
         link.select();
       }
     };
+  }
+
+  // Screenshot Lightbox
+  const galleryItems = [...document.querySelectorAll('[data-lightbox]')];
+  const lightbox = document.getElementById('lightbox');
+  if (lightbox && galleryItems.length) {
+    const img = document.getElementById('lightboxImg');
+    const count = document.getElementById('lightboxCount');
+    let idx = 0;
+
+    const showIndex = (next) => {
+      idx = (next + galleryItems.length) % galleryItems.length;
+      img.src = galleryItems[idx].dataset.lightbox;
+      count.textContent = `${idx + 1} / ${galleryItems.length}`;
+    };
+
+    galleryItems.forEach((el, i) => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        showIndex(i);
+        lightbox.showModal();
+      });
+    });
+
+    document.getElementById('lightboxPrev').onclick = () => showIndex(idx - 1);
+    document.getElementById('lightboxNext').onclick = () => showIndex(idx + 1);
+    document.getElementById('lightboxClose').onclick = () => lightbox.close();
+    lightbox.addEventListener('click', (e) => {
+      if (e.target === lightbox) lightbox.close();
+    });
   }
 
   async function screenshot(file) {

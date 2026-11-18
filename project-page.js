@@ -75,8 +75,37 @@ function formatAttachmentUrl(rawUrl, filename) {
   }
 }
 
-export function projectPage(p, releases = [], { preview = false } = {}) {
+function videoEmbedHtml(videoUrl) {
+  if (!videoUrl) return '';
+  try {
+    const parsed = new URL(videoUrl);
+    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+    let ytId = '';
+    if (host === 'youtu.be') {
+      ytId = parsed.pathname.slice(1).split('/')[0];
+    } else if (host === 'youtube.com' || host === 'm.youtube.com') {
+      if (parsed.pathname === '/watch') ytId = parsed.searchParams.get('v') || '';
+      else if (parsed.pathname.startsWith('/shorts/') || parsed.pathname.startsWith('/embed/')) {
+        ytId = parsed.pathname.split('/')[2] || '';
+      }
+    }
+    if (/^[a-zA-Z0-9_-]{6,20}$/.test(ytId)) {
+      return `<h2>Project video</h2><div class="video-wrap"><iframe title="Project video preview" src="https://www.youtube-nocookie.com/embed/${esc(
+        ytId
+      )}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`;
+    }
+    if (/\.(mp4|webm)(\?|$)/i.test(parsed.pathname)) {
+      return `<h2>Project video</h2><div class="video-wrap"><video controls preload="metadata" src="${esc(
+        videoUrl
+      )}"></video></div>`;
+    }
+  } catch {}
+  return '';
+}
+
+export function projectPage(p, releases = [], { preview = false, origin = '' } = {}) {
   const icon = (id) => (preview ? `#icon-${id}` : `/icons.svg#${id}`);
+  const slugOrId = p.slug || p.id;
 
   const archive = releases.length
     ? `<h2>APK releases</h2><div class="release-list">${releases
@@ -85,7 +114,9 @@ export function projectPage(p, releases = [], { preview = false } = {}) {
             `<article class="version-entry" id="release-${esc(r.id || 'original')}">` +
             `<div class="version-head"><strong>${esc(r.version)}</strong><span class="meta-sep">·</span><span>${esc(
               r.channel || 'Stable'
-            )}</span>${r.is_latest ? '<span class="meta-sep">·</span><span class="latest-mark">Latest</span>' : ''}</div>` +
+            )}</span>${
+              r.is_latest ? '<span class="meta-sep">·</span><span class="latest-mark">Latest</span>' : ''
+            }</div>` +
             `<small class="mono">${[
               r.published_at ? new Date(r.published_at).toISOString().slice(0, 10) : '',
               r.size ? `${(Number(r.size) / 1048576).toFixed(1)} MiB` : '',
@@ -100,7 +131,7 @@ export function projectPage(p, releases = [], { preview = false } = {}) {
               'download'
             )}"></use></svg> Download APK</a>` +
             (r.id
-              ? `<a class="release-permalink" href="/projects/${p.id}#release-${r.id}">Release link <svg aria-hidden="true" class="glyph"><use href="${icon(
+              ? `<a class="release-permalink" href="/projects/${esc(slugOrId)}#release-${r.id}">Release link <svg aria-hidden="true" class="glyph"><use href="${icon(
                   'external'
                 )}"></use></svg></a>`
               : '') +
@@ -111,6 +142,8 @@ export function projectPage(p, releases = [], { preview = false } = {}) {
 
   const sample = sampleFor(p);
   const image = p.image_url || `/${covers[p.category] || 'studio'}.webp`;
+  const absoluteImage = image.startsWith('/') && origin ? `${origin}${image}` : image;
+  const canonicalUrl = origin ? `${origin}/projects/${slugOrId}` : '';
 
   const files = (p.attachments || []).map((f) => ({
     url: f.size ? formatAttachmentUrl(f.url, f.name) : f.url,
@@ -136,15 +169,43 @@ export function projectPage(p, releases = [], { preview = false } = {}) {
   const gallery = (p.screenshots || [])
     .map(
       (url, i) =>
-        `<a href="${esc(url)}" target="_blank" rel="noopener"><img loading="lazy" referrerpolicy="no-referrer" alt="Screenshot ${
+        `<a class="gallery-item" data-lightbox="${esc(url)}" href="${esc(
+          url
+        )}" target="_blank" rel="noopener"><img loading="lazy" referrerpolicy="no-referrer" alt="Screenshot ${
           i + 1
         }" src="${esc(url)}"></a>`
     )
     .join('');
 
+  const stackLine = p.tech_stack
+    ? `<p class="stack-line mono">${esc(
+        String(p.tech_stack)
+          .split(/[,·]+/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .join(' · ')
+      )}</p>`
+    : '';
+
+  const highlights = Array.isArray(p.highlights) && p.highlights.length
+    ? `<h2>Key capabilities</h2><ul class="highlights-list">${p.highlights
+        .map((h) => `<li>${esc(h)}</li>`)
+        .join('')}</ul>`
+    : '';
+
+  const seoMeta =
+    `<meta name="description" content="${esc(p.summary || p.description || p.title)}">` +
+    (canonicalUrl ? `<link rel="canonical" href="${esc(canonicalUrl)}">` : '') +
+    `<meta property="og:title" content="${esc(p.title)} · ZUTECHSAM">` +
+    `<meta property="og:description" content="${esc(p.summary || p.description || 'Software & app showcase by ZUTECHSAM')}">` +
+    `<meta property="og:type" content="website">` +
+    (canonicalUrl ? `<meta property="og:url" content="${esc(canonicalUrl)}">` : '') +
+    `<meta property="og:image" content="${esc(absoluteImage)}">` +
+    `<meta name="twitter:card" content="summary_large_image">`;
+
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(
     p.title
-  )} · ZUTECHSAM</title><link rel="icon" href="/brand.svg" type="image/svg+xml"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/public.css"></head><body class="agency detail-page">${
+  )} · ZUTECHSAM</title>${seoMeta}<link rel="icon" href="/brand.svg" type="image/svg+xml"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/public.css"></head><body class="agency detail-page">${
     preview ? previewIcons : ''
   }<header><div class="wrap nav"><a class="logo" href="/"><img class="brand-mark" src="/brand.svg" width="34" height="34" alt=""><span>ZUTECHSAM</span></a><nav class="navlinks"><a href="/#projects">Our work</a><a href="/#services">Services</a><a href="/#about">Approach</a><a href="/#contact">Contact</a></nav><a class="pill" href="/#projects"><svg aria-hidden="true" class="glyph"><use href="${icon(
     'back'
@@ -152,19 +213,19 @@ export function projectPage(p, releases = [], { preview = false } = {}) {
     image
   )}" alt="${esc(p.title)} cover"></figure><div class="meta-line">${esc(p.category)} <span aria-hidden="true">·</span> ${
     p.version ? esc(p.version) : 'Project overview'
-  }</div><h1>${esc(p.title)}</h1><p class="release-summary">${esc(
+  }</div><h1>${esc(p.title)}</h1>${stackLine}<p class="release-summary">${esc(
     p.summary
   )}</p><a class="cta release-jump" href="#downloads"><svg aria-hidden="true" class="glyph"><use href="${icon(
     'download'
   )}"></use></svg> Downloads &amp; links</a><h2>About the project</h2><p class="prose">${esc(
     sample ? sample.description : p.description || p.summary
-  )}</p>${
+  )}</p>${highlights}${
     sample
       ? `<h2>Interactive sample</h2><iframe class="demo-frame" title="${esc(
           sample.name
         )}" src="/projects/${p.id}/demo" sandbox="allow-scripts"></iframe>`
       : ''
-  }${archive}${releaseTools(p, releases, { preview })}${
+  }${videoEmbedHtml(p.video_url)}${archive}${releaseTools(p, releases, { preview })}${
     gallery ? `<h2>Screenshots</h2><div class="release-gallery">${gallery}</div>` : ''
   }${
     p.release_notes ? `<h2>Release notes</h2><p class="prose">${esc(p.release_notes)}</p>` : ''
@@ -194,5 +255,5 @@ export function projectPage(p, releases = [], { preview = false } = {}) {
       : ''
   }<a class="textlink side-cta" href="/#contact">Discuss a similar project <svg aria-hidden="true" class="glyph"><use href="${icon(
     'external'
-  )}"></use></svg></a></aside></main></body></html>`;
+  )}"></use></svg></a></aside></main><dialog id="lightbox" class="lightbox-dialog"><div class="lightbox-bar"><span id="lightboxCount" class="mono"></span><div class="lightbox-actions"><button type="button" id="lightboxPrev">Prev</button><button type="button" id="lightboxNext">Next</button><button type="button" id="lightboxClose">Close</button></div></div><img id="lightboxImg" alt="Project screenshot"></dialog></body></html>`;
 }

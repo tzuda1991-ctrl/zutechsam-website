@@ -9,7 +9,15 @@ import {
   uploadPosition,
   mediaId,
 } from './uploads.js';
-import { centerSchema, centerApi, indexPackages } from './release-center.js';
+import {
+  centerSchema,
+  centerApi,
+  indexPackages,
+  getOrigin,
+  resolvePublishedProject,
+  sendTelegramAlert,
+  escapeText,
+} from './release-center.js';
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
@@ -80,6 +88,13 @@ const send = (res, status, data) => {
 const clean = (s) => String(s || '').trim();
 const hash = (p, s) => scryptSync(p, s, 64).toString('hex');
 
+const slugify = (text) =>
+  String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+
 const rateBuckets = new Map();
 function allowRequest(key, maxCount, windowMs) {
   const now = Date.now();
@@ -124,6 +139,20 @@ function rewriteProjectMedia(p) {
   };
 }
 
+async function uniqueSlug(db, desired, title, excludeId = null) {
+  const base = slugify(desired || title) || 'project';
+  let candidate = base;
+  for (let i = 0; i < 20; i++) {
+    const q = await db.query(
+      'SELECT id FROM projects WHERE slug=$1 AND ($2::bigint IS NULL OR id<>$2)',
+      [candidate, excludeId]
+    );
+    if (!q.rowCount) return candidate;
+    candidate = `${base.slice(0, 72)}-${i + 2}`;
+  }
+  return `${base.slice(0, 68)}-${Date.now().toString(36)}`;
+}
+
 async function init() {
   if (!pool) return;
   await pool.query(`
@@ -146,7 +175,11 @@ async function init() {
       ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]',
       ADD COLUMN IF NOT EXISTS screenshots JSONB NOT NULL DEFAULT '[]',
       ADD COLUMN IF NOT EXISTS release_notes TEXT NOT NULL DEFAULT '',
-      ADD COLUMN IF NOT EXISTS version TEXT NOT NULL DEFAULT '';
+      ADD COLUMN IF NOT EXISTS version TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS slug TEXT,
+      ADD COLUMN IF NOT EXISTS tech_stack TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS highlights JSONB NOT NULL DEFAULT '[]';
+    CREATE UNIQUE INDEX IF NOT EXISTS projects_slug_unique ON projects(slug) WHERE slug IS NOT NULL AND slug <> '';
     CREATE TABLE IF NOT EXISTS enquiries(
       id BIGSERIAL PRIMARY KEY,
       name TEXT NOT NULL,
@@ -156,6 +189,9 @@ async function init() {
       status TEXT NOT NULL DEFAULT 'new',
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE enquiries
+      ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS budget TEXT NOT NULL DEFAULT '';
     CREATE TABLE IF NOT EXISTS admins(
       id BIGSERIAL PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
@@ -188,36 +224,57 @@ async function init() {
       const demos = [
         [
           'ZUTECHSAM Android App',
+          'zutechsam-android-app',
           'Apps',
           'Android app UI showcase — sample portfolio entry',
           'TEST PROJECT: A sample Android application concept for testing the portfolio gallery and admin workflow. No APK has been uploaded.',
+          'Kotlin · Jetpack Compose · Material 3',
+          JSON.stringify(['Offline task checklist', 'Clean adaptive UI', 'Versioned APK rollout']),
         ],
         [
           'Arcade Game Concept',
+          'arcade-game-concept',
           'Games',
           'Mobile game interface and gameplay concept',
           'TEST PROJECT: A sample game development portfolio card. Gameplay and downloadable builds are not available yet.',
+          'HTML5 Canvas · JavaScript · WebAudio',
+          JSON.stringify(['Low-latency touch reaction loop', 'Zero external dependencies', '60fps frame timing']),
         ],
         [
           'AI Assistant Prototype',
+          'ai-assistant-prototype',
           'AI',
           'AI assistant and automation concept',
           'TEST PROJECT: Sample AI and automation showcase. This is a placeholder, not a live AI service.',
+          'Node.js · PostgreSQL · NLP Pipelines',
+          JSON.stringify(['Instant keyword frequency analysis', 'Unicode multi-language tokenization', 'Exportable workflow output']),
         ],
         [
           'Business Website Design',
+          'business-website-design',
           'Websites',
           'Responsive website design concept',
           'TEST PROJECT: Sample website showcase for testing project categories and detail pages. No live demo is attached.',
+          'HTML5 · CSS Grid · Responsive Design',
+          JSON.stringify(['Interactive brand palette switcher', 'Mobile-first layout', 'Fast zero-bundle delivery']),
         ],
       ];
       for (const d of demos) {
         await pool.query(
-          'INSERT INTO projects(title,category,summary,description,featured,published) VALUES($1,$2,$3,$4,false,true)',
+          'INSERT INTO projects(title,slug,category,summary,description,tech_stack,highlights,featured,published) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,false,true)',
           d
         );
       }
       console.log('Inserted four labeled test projects');
+    }
+
+    // Backfill slugs for any legacy projects missing one
+    const missingSlugs = (
+      await pool.query("SELECT id, title FROM projects WHERE slug IS NULL OR slug=''")
+    ).rows;
+    for (const row of missingSlugs) {
+      const s = await uniqueSlug(pool, '', row.title, row.id);
+      await pool.query('UPDATE projects SET slug=$1 WHERE id=$2', [s, row.id]);
     }
   }
 }
@@ -257,14 +314,14 @@ async function body(req) {
 
 const token = (req) => (req.headers.authorization || '').replace(/^Bearer /, '').trim();
 
-async function auth(req) {
+async function getAdminSession(req) {
   const t = token(req);
-  if (!/^[a-f0-9]{64}$/.test(t)) return false;
+  if (!/^[a-f0-9]{64}$/.test(t)) return null;
   const q = await pool.query(
-    'SELECT token FROM admin_sessions WHERE token=$1 AND expires_at > now()',
+    'SELECT username FROM admin_sessions WHERE token=$1 AND expires_at > now()',
     [t]
   );
-  return q.rowCount > 0;
+  return q.rows[0] || null;
 }
 
 const urlOk = (s) => {
@@ -289,7 +346,7 @@ const pageCsp =
   "default-src 'self' https: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'";
 
 const detailCsp =
-  "default-src 'self'; img-src 'self' https:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self'; frame-ancestors 'none'";
+  "default-src 'self'; img-src 'self' https: data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://www.youtube-nocookie.com; media-src 'self' https:; frame-ancestors 'none'";
 
 http
   .createServer(async (req, res) => {
@@ -314,6 +371,12 @@ http
 
       if (path === '/health') {
         return send(res, 200, { ok: true, mode: admin ? 'admin' : 'public', database: !!pool });
+      }
+
+      if (path === '/robots.txt' && req.method === 'GET' && !admin) {
+        const origin = getOrigin(req);
+        res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+        return res.end(`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
       }
 
       if (path === '/' || path === '/index.html') {
@@ -402,17 +465,54 @@ http
         return send(res, 503, { error: 'Database is not configured. Add DATABASE_URL.' });
       }
 
+      if (path === '/sitemap.xml' && req.method === 'GET' && !admin) {
+        const origin = getOrigin(req);
+        const rows = (
+          await pool.query(
+            'SELECT id, slug, created_at FROM projects WHERE published=true ORDER BY created_at DESC LIMIT 500'
+          )
+        ).rows;
+        const urls = [
+          `<url><loc>${escapeText(origin)}/</loc><changefreq>weekly</changefreq></url>`,
+          ...rows.map(
+            (r) =>
+              `<url><loc>${escapeText(origin)}/projects/${escapeText(
+                r.slug || r.id
+              )}</loc><lastmod>${new Date(r.created_at).toISOString()}</lastmod></url>`
+          ),
+        ];
+        res.writeHead(200, {
+          'content-type': 'application/xml; charset=utf-8',
+          'cache-control': 'public, max-age=600',
+        });
+        return res.end(
+          `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join(
+            ''
+          )}</urlset>`
+        );
+      }
+
       if (!admin && (await centerApi(path, req, res, { pool, body, send, admin }))) return;
 
       const releaseDownload =
-        !admin && /^\/projects\/(\d+)\/releases\/(\d+)\/download$/.exec(path);
+        !admin && /^\/projects\/([a-zA-Z0-9-]+)\/releases\/(\d+)\/download$/.exec(path);
       if (releaseDownload && ['GET', 'HEAD'].includes(req.method)) {
+        const project = await resolvePublishedProject(pool, releaseDownload[1]);
+        if (!project) return send(res, 404, { error: 'Release unavailable' });
         const sql =
           req.method === 'GET'
-            ? 'UPDATE project_releases r SET download_clicks=r.download_clicks+1 FROM projects p WHERE r.id=$2 AND p.id=$1 AND p.published AND r.project_id=p.id RETURNING r.url'
-            : 'SELECT r.url FROM project_releases r JOIN projects p ON p.id=r.project_id WHERE r.id=$2 AND p.id=$1 AND p.published';
-        const r = await pool.query(sql, releaseDownload.slice(1));
+            ? 'UPDATE project_releases SET download_clicks=download_clicks+1 WHERE id=$2 AND project_id=$1 RETURNING id, url'
+            : 'SELECT id, url FROM project_releases WHERE id=$2 AND project_id=$1';
+        const r = await pool.query(sql, [project.id, releaseDownload[2]]);
         if (!r.rowCount) return send(res, 404, { error: 'Release unavailable' });
+        if (req.method === 'GET') {
+          pool
+            .query('INSERT INTO download_events(project_id, release_id) VALUES($1,$2)', [
+              project.id,
+              r.rows[0].id,
+            ])
+            .catch(() => {});
+        }
         res.writeHead(302, {
           location: resolvePublicMedia(r.rows[0].url),
           'cache-control': 'no-store',
@@ -421,12 +521,9 @@ http
       }
 
       const projectRoute =
-        !admin && /^\/projects\/(\d+)(?:\/(demo|sample\.html))?\/?$/.exec(path);
+        !admin && /^\/projects\/([a-zA-Z0-9-]+)(?:\/(demo|sample\.html))?\/?$/.exec(path);
       if (projectRoute && req.method === 'GET') {
-        const result = await pool.query('SELECT * FROM projects WHERE id=$1 AND published=true', [
-          projectRoute[1],
-        ]);
-        const project = result.rows[0];
+        const project = await resolvePublishedProject(pool, projectRoute[1]);
         const sample = project && sampleFor(project);
         const mode = projectRoute[2];
         if (!project || (mode && !sample)) {
@@ -447,13 +544,20 @@ http
         }
         res.writeHead(200, headers);
         return res.end(
-          mode ? sampleHtml(sample) : await releaseView(pool, rewriteProjectMedia(project))
+          mode
+            ? sampleHtml(sample)
+            : await releaseView(pool, rewriteProjectMedia(project), null, getOrigin(req))
         );
       }
 
       if (path === '/api/studio' && req.method === 'GET') {
         const result = await pool.query('SELECT data FROM studio_settings WHERE id=1');
-        return send(res, 200, result.rows[0]?.data || {});
+        const d = result.rows[0]?.data || {};
+        return send(res, 200, {
+          headline: d.headline || '',
+          intro: d.intro || '',
+          email: d.email || '',
+        });
       }
 
       if (path === '/api/projects' && req.method === 'GET') {
@@ -467,7 +571,7 @@ http
             const p = rewriteProjectMedia(row);
             return {
               ...p,
-              demo_link: p.demo_url || (sampleFor(p) ? `/projects/${p.id}/demo` : null),
+              demo_link: p.demo_url || (sampleFor(p) ? `/projects/${p.slug || p.id}/demo` : null),
             };
           })
         );
@@ -486,15 +590,24 @@ http
         ) {
           return send(res, 400, { error: 'Please provide valid name, email and message' });
         }
+        const name = clean(b.name).slice(0, 120);
+        const email = clean(b.email).slice(0, 200);
+        const service = clean(b.service).slice(0, 100);
+        const budget = clean(b.budget).slice(0, 80);
+        const message = clean(b.message);
+
         await pool.query(
-          'INSERT INTO enquiries(name,email,service,message) VALUES($1,$2,$3,$4)',
-          [
-            clean(b.name).slice(0, 120),
-            clean(b.email).slice(0, 200),
-            clean(b.service).slice(0, 100),
-            clean(b.message),
-          ]
+          'INSERT INTO enquiries(name,email,service,budget,message) VALUES($1,$2,$3,$4,$5)',
+          [name, email, service, budget, message]
         );
+
+        sendTelegramAlert(
+          pool,
+          `New client enquiry\nName: ${name}\nEmail: ${email}\nService: ${service}${
+            budget ? `\nBudget: ${budget}` : ''
+          }\nMessage: ${message}`
+        ).catch(() => {});
+
         return send(res, 201, { ok: true });
       }
 
@@ -507,7 +620,10 @@ http
         const b = await body(req);
         const q = await pool.query('SELECT * FROM admins WHERE username=$1', [clean(b.username)]);
         const a = q.rows[0];
-        const candidate = Buffer.from(hash(String(b.password || ''), a?.salt || '0'.repeat(32)), 'hex');
+        const candidate = Buffer.from(
+          hash(String(b.password || ''), a?.salt || '0'.repeat(32)),
+          'hex'
+        );
         const expected = a ? Buffer.from(a.password_hash, 'hex') : null;
         if (!a || expected.length !== candidate.length || !timingSafeEqual(candidate, expected)) {
           return send(res, 401, { error: 'Invalid credentials' });
@@ -526,7 +642,8 @@ http
         return send(res, 200, { ok: true });
       }
 
-      if (!(await auth(req))) return send(res, 401, { error: 'Login required' });
+      const session = await getAdminSession(req);
+      if (!session) return send(res, 401, { error: 'Login required' });
 
       if (await centerApi(path, req, res, { pool, body, send, admin })) return;
       if (await releaseApi(path, req, res, { pool, body, send })) return;
@@ -536,10 +653,31 @@ http
         return send(res, 200, await uploadPosition(path.split('/').pop(), size));
       }
 
+      if (path === '/api/admin/studio' && req.method === 'GET') {
+        const result = await pool.query('SELECT data FROM studio_settings WHERE id=1');
+        const d = result.rows[0]?.data || {};
+        return send(res, 200, {
+          headline: d.headline || '',
+          intro: d.intro || '',
+          email: d.email || '',
+          telegram_chat_id: d.telegram_chat_id || '',
+          has_telegram_token: !!d.telegram_bot_token,
+        });
+      }
+
       if (path === '/api/admin/studio' && req.method === 'PUT') {
         const data = await body(req);
-        const keys = ['headline', 'intro', 'email'];
-        const settings = Object.fromEntries(keys.map((key) => [key, clean(data[key])]));
+        const current =
+          (await pool.query('SELECT data FROM studio_settings WHERE id=1')).rows[0]?.data || {};
+        const settings = {
+          headline: clean(data.headline),
+          intro: clean(data.intro),
+          email: clean(data.email),
+          telegram_chat_id: clean(data.telegram_chat_id).slice(0, 80),
+          telegram_bot_token: data.clear_telegram
+            ? ''
+            : clean(data.telegram_bot_token) || current.telegram_bot_token || '',
+        };
         if (
           settings.headline.length > 90 ||
           settings.intro.length > 360 ||
@@ -551,7 +689,73 @@ http
           'INSERT INTO studio_settings(id,data) VALUES(1,$1) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data',
           [settings]
         );
+        return send(res, 200, { ok: true, has_telegram_token: !!settings.telegram_bot_token });
+      }
+
+      if (path === '/api/admin/telegram-test' && req.method === 'POST') {
+        const result = await sendTelegramAlert(
+          pool,
+          `ZUTECHSAM Studio alert test (${new Date().toISOString()})`
+        );
+        if (!result.sent) {
+          return send(res, 400, {
+            error:
+              result.reason === 'not_configured'
+                ? 'Save a Telegram Bot Token and Chat ID first.'
+                : `Telegram error: ${result.reason}`,
+          });
+        }
         return send(res, 200, { ok: true });
+      }
+
+      if (path === '/api/admin/password' && req.method === 'POST') {
+        const data = await body(req);
+        const currentPw = String(data.currentPassword || '');
+        const nextPw = String(data.newPassword || '');
+        if (nextPw.length < 8 || nextPw.length > 128) {
+          return send(res, 400, { error: 'New password must be 8 to 128 characters.' });
+        }
+        const a = (
+          await pool.query('SELECT * FROM admins WHERE username=$1', [session.username])
+        ).rows[0];
+        if (!a) return send(res, 404, { error: 'Account not found' });
+        const candidate = Buffer.from(hash(currentPw, a.salt), 'hex');
+        const expected = Buffer.from(a.password_hash, 'hex');
+        if (expected.length !== candidate.length || !timingSafeEqual(candidate, expected)) {
+          return send(res, 401, { error: 'Current password is incorrect.' });
+        }
+        const newSalt = randomBytes(16).toString('hex');
+        await pool.query('UPDATE admins SET salt=$1, password_hash=$2 WHERE id=$3', [
+          newSalt,
+          hash(nextPw, newSalt),
+          a.id,
+        ]);
+        return send(res, 200, { ok: true });
+      }
+
+      if (path === '/api/admin/backup' && req.method === 'GET') {
+        const [proj, rel, enq, settings] = await Promise.all([
+          pool.query('SELECT * FROM projects ORDER BY id'),
+          pool.query('SELECT * FROM project_releases ORDER BY id'),
+          pool.query('SELECT * FROM enquiries ORDER BY id'),
+          pool.query('SELECT data FROM studio_settings WHERE id=1'),
+        ]);
+        const s = settings.rows[0]?.data || {};
+        const payload = {
+          exportedAt: new Date().toISOString(),
+          studio: { headline: s.headline || '', intro: s.intro || '', email: s.email || '' },
+          projects: proj.rows,
+          releases: rel.rows,
+          enquiries: enq.rows,
+        };
+        res.writeHead(200, {
+          'content-type': 'application/json; charset=utf-8',
+          'content-disposition': `attachment; filename="zutechsam-backup-${new Date()
+            .toISOString()
+            .slice(0, 10)}.json"`,
+          'cache-control': 'no-store',
+        });
+        return res.end(JSON.stringify(payload, null, 2));
       }
 
       if (path === '/api/admin/uploads' && req.method === 'GET') {
@@ -605,7 +809,8 @@ http
                 UNION ALL SELECT r.url FROM project_releases r WHERE r.project_id=p.id
               ) downloads
             ) AS file_count,
-            (SELECT count(*)::int FROM project_releases r WHERE r.project_id=p.id) AS release_count
+            (SELECT count(*)::int FROM project_releases r WHERE r.project_id=p.id) AS release_count,
+            (SELECT COALESCE(SUM(r.download_clicks),0)::int FROM project_releases r WHERE r.project_id=p.id) AS downloads_total
           FROM projects p
           ORDER BY p.created_at DESC
           LIMIT 500
@@ -635,7 +840,9 @@ http
           !['Apps', 'Games', 'AI', 'Websites', 'Software'].includes(b.category) ||
           !['image_url', 'demo_url', 'apk_url', 'video_url'].every((k) => urlOk(clean(b[k])))
         ) {
-          return send(res, 400, { error: 'Title, valid category and valid HTTPS/media URLs required' });
+          return send(res, 400, {
+            error: 'Title, valid category and valid HTTPS/media URLs required',
+          });
         }
 
         const screenshots = b.screenshots;
@@ -646,6 +853,16 @@ http
             !screenshots.every((u) => typeof u === 'string' && u && urlOk(u)))
         ) {
           return send(res, 400, { error: 'Use up to six valid screenshot URLs' });
+        }
+
+        const highlights = b.highlights;
+        if (
+          highlights !== undefined &&
+          (!Array.isArray(highlights) ||
+            highlights.length > 8 ||
+            !highlights.every((h) => typeof h === 'string' && h.trim() && h.length <= 160))
+        ) {
+          return send(res, 400, { error: 'Use up to 8 highlights (max 160 chars each)' });
         }
 
         const attachments = b.attachments;
@@ -669,6 +886,13 @@ http
           return send(res, 400, { error: 'Use up to 12 named files with valid URLs' });
         }
 
+        const slug = await uniqueSlug(
+          pool,
+          clean(b.slug),
+          clean(b.title),
+          req.method === 'PUT' ? id : null
+        );
+
         const vals = [
           clean(b.title).slice(0, 150),
           b.category,
@@ -684,15 +908,18 @@ http
           screenshots === undefined ? null : JSON.stringify(screenshots),
           b.release_notes === undefined ? null : clean(b.release_notes).slice(0, 4000),
           attachments === undefined ? null : JSON.stringify(attachments),
+          slug,
+          clean(b.tech_stack).slice(0, 240),
+          highlights === undefined ? null : JSON.stringify(highlights.map((h) => h.trim())),
         ];
 
         if (req.method === 'POST') {
           await pool.query(
-            'INSERT INTO projects(title,category,summary,description,image_url,demo_url,apk_url,video_url,featured,published,version,screenshots,release_notes,attachments) VALUES(' +
+            'INSERT INTO projects(title,category,summary,description,image_url,demo_url,apk_url,video_url,featured,published,version,screenshots,release_notes,attachments,slug,tech_stack,highlights) VALUES(' +
               vals
                 .map((_, i) =>
-                  i === 13
-                    ? "coalesce($14::jsonb,'[]'::jsonb)"
+                  i === 13 || i === 16
+                    ? `coalesce($${i + 1}::jsonb,'[]'::jsonb)`
                     : i === 11
                       ? "coalesce($12::jsonb,'[]'::jsonb)"
                       : i === 12
@@ -705,7 +932,7 @@ http
           );
         } else {
           await pool.query(
-            'UPDATE projects SET title=$1,category=$2,summary=$3,description=$4,image_url=$5,demo_url=$6,apk_url=$7,video_url=$8,featured=$9,published=$10,version=$11,screenshots=coalesce($12::jsonb,screenshots),release_notes=coalesce($13,release_notes),attachments=coalesce($14::jsonb,attachments) WHERE id=$15',
+            'UPDATE projects SET title=$1,category=$2,summary=$3,description=$4,image_url=$5,demo_url=$6,apk_url=$7,video_url=$8,featured=$9,published=$10,version=$11,screenshots=coalesce($12::jsonb,screenshots),release_notes=coalesce($13,release_notes),attachments=coalesce($14::jsonb,attachments),slug=$15,tech_stack=$16,highlights=coalesce($17::jsonb,highlights) WHERE id=$18',
             [...vals, id]
           );
         }
@@ -714,13 +941,16 @@ http
 
       if (/^\/api\/admin\/enquiries\/\d+$/.test(path) && req.method === 'PATCH') {
         const b = await body(req);
-        if (!['new', 'contacted', 'closed'].includes(b.status)) {
+        const enquiryId = Number(path.split('/').pop());
+        if (b.status !== undefined && !['new', 'contacted', 'quoted', 'closed'].includes(b.status)) {
           return send(res, 400, { error: 'Invalid status' });
         }
-        await pool.query('UPDATE enquiries SET status=$1 WHERE id=$2', [
-          b.status,
-          Number(path.split('/').pop()),
-        ]);
+        const notes = b.notes === undefined ? null : clean(b.notes).slice(0, 2000);
+        const status = b.status === undefined ? null : b.status;
+        await pool.query(
+          'UPDATE enquiries SET status=coalesce($1,status), notes=coalesce($2,notes) WHERE id=$3',
+          [status, notes, enquiryId]
+        );
         return send(res, 200, { ok: true });
       }
 

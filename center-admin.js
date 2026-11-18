@@ -3,9 +3,42 @@
   const content = $('centerContent');
   const status = $('centerStatus');
 
+  function downloadBars(daily) {
+    const days = [];
+    const lookup = new Map((daily || []).map((d) => [d.day, d.count]));
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().slice(0, 10);
+      days.push({ label: iso.slice(5), count: lookup.get(iso) || 0 });
+    }
+    const max = Math.max(1, ...days.map((d) => d.count));
+    return (
+      '<div class="week week-14">' +
+      days
+        .map(
+          (d) =>
+            `<div><b>${d.count}</b><i style="height:${Math.round((d.count / max) * 48 + 3)}px"></i><small class="mono">${esc(
+              d.label
+            )}</small></div>`
+        )
+        .join('') +
+      '</div>'
+    );
+  }
+
   async function load() {
-    const { reports, visits, activity } = await api('/api/admin/center');
+    const { reports, visits, activity, downloadsDaily, topProjects } = await api('/api/admin/center');
     content.innerHTML =
+      '<h3>Downloads (last 14 days)</h3>' +
+      downloadBars(downloadsDaily) +
+      '<h3>Top projects by downloads &amp; campaign visits</h3>' +
+      ((topProjects || [])
+        .map(
+          (p) =>
+            `<p class="mono">${esc(p.title)} · ${p.downloads} downloads · ${p.visits} campaign visits</p>`
+        )
+        .join('') || '<p>No project analytics yet.</p>') +
       '<h3>Version bug reports</h3>' +
       (reports
         .map(

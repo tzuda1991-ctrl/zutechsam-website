@@ -725,3 +725,44 @@ dialog::backdrop {
     display: none;
   }
 }
+
+/* CRM Notes & 14-day Download Analytics */
+.enquiry-row {
+  align-items: flex-start;
+}
+
+.enquiry-row > div {
+  flex: 1;
+}
+
+.crm-notes {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.crm-notes input {
+  margin-top: 0;
+  font-size: 0.85rem;
+  padding: 7px 10px;
+}
+
+.crm-notes button {
+  padding: 7px 12px;
+  font-size: 0.8rem;
+}
+
+.week-14 {
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 18px;
+}
+
+.week-14 small {
+  font-size: 0.65rem;
+}
+
+#centerContent h3 {
+  margin-top: 18px;
+}
