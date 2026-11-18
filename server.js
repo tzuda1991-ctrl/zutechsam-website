@@ -1,6 +1,6 @@
 import http from 'node:http';
-import {readFile,mkdir,open,stat} from 'node:fs/promises';
-import {createWriteStream} from 'node:fs';
+import {readFile,stat} from 'node:fs/promises';
+import {createReadStream} from 'node:fs';
 import {pipeline} from 'node:stream/promises';
 import pathModule from 'node:path';
 import {randomBytes,scryptSync,timingSafeEqual} from 'node:crypto';
@@ -8,17 +8,16 @@ import pg from 'pg';
 const port=Number(process.env.PORT||3000),admin=process.env.SITE_MODE==='admin';
 const pool=process.env.DATABASE_URL?new pg.Pool({connectionString:process.env.DATABASE_URL,ssl:process.env.DATABASE_URL.includes('localhost')?false:{rejectUnauthorized:false}}):null;
 const sessions=new Map();
-const uploadDir=process.env.UPLOAD_DIR||'/data/uploads';
+const assets = new Map(await Promise.all(['public.css','admin.css','admin.js','public.js'].map(async name => ['/'+name,await readFile(new URL('./'+name,import.meta.url))])));
+import {directory as uploadDir, apkMB, startUpload, writePart, cleanStaging} from './uploads.js';
+if(admin) setInterval(()=>cleanStaging().catch(console.error),3600000).unref();
 const mediaOrigin=(process.env.MEDIA_BASE_URL||'').replace(/\/$/,'');
 const mediaTypes={'.apk':'application/vnd.android.package-archive','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
-const mediaLimit=100*1024*1024;
-async function saveUpload(req,ext){await mkdir(uploadDir,{recursive:true});const name=randomBytes(20).toString('hex')+ext;const dest=pathModule.join(uploadDir,name);const out=createWriteStream(dest,{flags:'wx',mode:0o600});let size=0;try{for await(const chunk of req){size+=chunk.length;if(size>mediaLimit)throw Error('Upload exceeds 100 MB');if(!out.write(chunk))await new Promise(resolve=>out.once('drain',resolve))}await new Promise((resolve,reject)=>out.end(err=>err?reject(err):resolve()));if(size<16)throw Error('File is empty or invalid');const file=await open(dest,'r');const buf=Buffer.alloc(12);await file.read(buf,0,12,0);await file.close();const isPng=buf.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]));const isJpg=buf[0]===255&&buf[1]===216&&buf[2]===255;const isWebp=buf.toString('ascii',0,4)==='RIFF'&&buf.toString('ascii',8,12)==='WEBP';const isApk=buf.toString('hex',0,4)==='504b0304';if(!((ext==='.png'&&isPng)||(['.jpg','.jpeg'].includes(ext)&&isJpg)||(ext==='.webp'&&isWebp)||(ext==='.apk'&&isApk)))throw Error('File signature does not match type');return name}catch(e){out.destroy();const {unlink}=await import('node:fs/promises');await unlink(dest).catch(()=>{});throw e}}
-
 const html=await readFile(new URL(admin?'./admin.html':'./index.html',import.meta.url));
 const send=(res,status,data)=>{res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store'});res.end(JSON.stringify(data))};
 const clean=s=>String(s||'').trim();
 const hash=(p,s)=>scryptSync(p,s,64).toString('hex');
-async function init(){if(!pool)return;await pool.query(`CREATE TABLE IF NOT EXISTS projects(id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,category TEXT NOT NULL,summary TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',image_url TEXT NOT NULL DEFAULT '',demo_url TEXT NOT NULL DEFAULT '',apk_url TEXT NOT NULL DEFAULT '',video_url TEXT NOT NULL DEFAULT '',featured BOOLEAN NOT NULL DEFAULT false,published BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now());CREATE TABLE IF NOT EXISTS enquiries(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,email TEXT NOT NULL,service TEXT NOT NULL,message TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'new',created_at TIMESTAMPTZ NOT NULL DEFAULT now());CREATE TABLE IF NOT EXISTS admins(id BIGSERIAL PRIMARY KEY,username TEXT UNIQUE NOT NULL,salt TEXT NOT NULL,password_hash TEXT NOT NULL)`);if(process.env.ADMIN_USERNAME&&process.env.ADMIN_PASSWORD){const found=await pool.query('SELECT id FROM admins LIMIT 1');if(!found.rowCount){const salt=randomBytes(16).toString('hex');await pool.query('INSERT INTO admins(username,salt,password_hash) VALUES($1,$2,$3)',[process.env.ADMIN_USERNAME,salt,hash(process.env.ADMIN_PASSWORD,salt)])}}
+async function init(){if(!pool)return;await pool.query(`CREATE TABLE IF NOT EXISTS studio_settings(id INTEGER PRIMARY KEY, data JSONB NOT NULL);CREATE TABLE IF NOT EXISTS projects(id BIGSERIAL PRIMARY KEY,title TEXT NOT NULL,category TEXT NOT NULL,summary TEXT NOT NULL DEFAULT '',description TEXT NOT NULL DEFAULT '',image_url TEXT NOT NULL DEFAULT '',demo_url TEXT NOT NULL DEFAULT '',apk_url TEXT NOT NULL DEFAULT '',video_url TEXT NOT NULL DEFAULT '',featured BOOLEAN NOT NULL DEFAULT false,published BOOLEAN NOT NULL DEFAULT true,created_at TIMESTAMPTZ NOT NULL DEFAULT now());ALTER TABLE projects ADD COLUMN IF NOT EXISTS version TEXT NOT NULL DEFAULT '';CREATE TABLE IF NOT EXISTS enquiries(id BIGSERIAL PRIMARY KEY,name TEXT NOT NULL,email TEXT NOT NULL,service TEXT NOT NULL,message TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'new',created_at TIMESTAMPTZ NOT NULL DEFAULT now());CREATE TABLE IF NOT EXISTS admins(id BIGSERIAL PRIMARY KEY,username TEXT UNIQUE NOT NULL,salt TEXT NOT NULL,password_hash TEXT NOT NULL)`);if(process.env.ADMIN_USERNAME&&process.env.ADMIN_PASSWORD){const found=await pool.query('SELECT id FROM admins LIMIT 1');if(!found.rowCount){const salt=randomBytes(16).toString('hex');await pool.query('INSERT INTO admins(username,salt,password_hash) VALUES($1,$2,$3)',[process.env.ADMIN_USERNAME,salt,hash(process.env.ADMIN_PASSWORD,salt)])}}
 if(admin){
 const count=await pool.query('SELECT COUNT(*)::int AS n FROM projects');
 if(count.rows[0].n===0){
@@ -40,30 +39,70 @@ const auth=req=>{const s=sessions.get(token(req));if(!s||s.expires<Date.now())re
 const urlOk=s=>!s||(/^https:\/\//i.test(s)&&s.length<1500);
 http.createServer(async(req,res)=>{try{
 const path=new URL(req.url,'http://localhost').pathname;
+if(assets.has(path)){res.writeHead(200,{'content-type':path.endsWith('.css')?'text/css':'text/javascript'});return res.end(assets.get(path))}
 if(path==='/health')return send(res,200,{ok:true,mode:admin?'admin':'public',database:!!pool});
 if(path==='/'||path==='/index.html'){res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-security-policy':"default-src 'self' https: data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'",'x-content-type-options':'nosniff'});return res.end(html)}
-if(/^\/media\/[a-f0-9]{40}\.(apk|png|jpg|jpeg|webp)$/.test(path)&&req.method==='GET'){
+if(/^\/media\/[a-f0-9]{40}\.(apk|png|jpg|jpeg|webp)$/.test(path)&&['GET','HEAD'].includes(req.method)){
 if(!admin){if(!mediaOrigin)return send(res,503,{error:'MEDIA_BASE_URL is not configured'});res.writeHead(302,{location:mediaOrigin+path,'cache-control':'public, max-age=300'});return res.end()}
-try{const name=pathModule.basename(path),p=pathModule.join(uploadDir,name),info=await stat(p);res.writeHead(200,{'content-type':mediaTypes[pathModule.extname(name)],'content-length':info.size,'x-content-type-options':'nosniff','content-disposition':path.endsWith('.apk')?'attachment; filename="zutechsam-app.apk"':'inline','cache-control':'public, max-age=31536000, immutable'});const stream=(await import('node:fs')).createReadStream(p);return stream.pipe(res)}catch{return send(res,404,{error:'File not found'})}}
+try{
+  const name=pathModule.basename(path), file=pathModule.join(uploadDir,name), info=await stat(file);
+  const headers={'content-type':mediaTypes[pathModule.extname(name)],'accept-ranges':'bytes','x-content-type-options':'nosniff','content-disposition':path.endsWith('.apk')?'attachment; filename="zutechsam-app.apk"':'inline','cache-control':'public, max-age=31536000, immutable'};
+  let start=0,end=info.size-1;
+  const range=req.headers.range;
+  if(range){
+    const match=/^bytes=(\d*)-(\d*)$/.exec(range);
+    if(match && match[1]){start=Number(match[1]);if(match[2])end=Math.min(end,Number(match[2]));}
+    else if(match && match[2])start=Math.max(0,info.size-Number(match[2]));
+    if(!match || (!match[1] && !match[2]) || start>end || start>=info.size){
+      res.writeHead(416,{'content-range':'bytes */'+info.size});return res.end();
+    }
+    headers['content-range']='bytes '+start+'-'+end+'/'+info.size;
+  }
+  res.writeHead(range?206:200,{...headers,'content-length':end-start+1});
+  if(req.method==='HEAD')return res.end();
+  await pipeline(createReadStream(file,{start,end}),res).catch(()=>{});return;
+}catch{return send(res,404,{error:'File not found'})}}
 if(!pool)return send(res,503,{error:'Database is not configured. Add DATABASE_URL on Railway.'});
+if(path==='/api/studio' && req.method==='GET'){
+  const result=await pool.query('SELECT data FROM studio_settings WHERE id=1');
+  return send(res,200,result.rows[0]?.data || {});
+}
 if(path==='/api/projects'&&req.method==='GET'){const q=await pool.query('SELECT * FROM projects WHERE published=true ORDER BY featured DESC,created_at DESC LIMIT 500');return send(res,200,q.rows)}
 if(path==='/api/enquiries'&&req.method==='POST'&&!admin){const b=await body(req);if(!clean(b.name)||!/^\S+@\S+\.\S+$/.test(clean(b.email))||!clean(b.message)||clean(b.message).length>5000)return send(res,400,{error:'Please provide valid name, email and message'});await pool.query('INSERT INTO enquiries(name,email,service,message) VALUES($1,$2,$3,$4)',[clean(b.name).slice(0,120),clean(b.email).slice(0,200),clean(b.service).slice(0,100),clean(b.message)]);return send(res,201,{ok:true})}
 if(!admin)return send(res,404,{error:'Not found'});
 if(path==='/api/login'&&req.method==='POST'){const b=await body(req);const q=await pool.query('SELECT * FROM admins WHERE username=$1',[clean(b.username)]);const a=q.rows[0];if(!a||!timingSafeEqual(Buffer.from(hash(String(b.password||''),a.salt),'hex'),Buffer.from(a.password_hash,'hex')))return send(res,401,{error:'Invalid credentials'});const t=randomBytes(32).toString('hex');sessions.set(t,{expires:Date.now()+8*3600000});return send(res,200,{token:t})}
 if(path==='/api/logout'&&req.method==='POST'){sessions.delete(token(req));return send(res,200,{ok:true})}
 if(!auth(req))return send(res,401,{error:'Login required'});
-if(path==='/api/admin/upload'&&req.method==='POST'){
-const ext=pathModule.extname(String(req.headers['x-filename']||'').toLowerCase());if(!mediaTypes[ext])return send(res,400,{error:'Only APK, PNG, JPG and WebP are allowed'});
-if(!req.headers['content-length']||Number(req.headers['content-length'])>mediaLimit)return send(res,413,{error:'File size must be 100 MB or less'});
-try{const name=await saveUpload(req,ext);return send(res,201,{ok:true,url:'/media/'+name})}catch(e){return send(res,400,{error:e.message})}}
-
+if(path==='/api/admin/studio' && req.method==='PUT'){
+  const data=await body(req);
+  const keys=['headline','intro','email'];
+  const settings=Object.fromEntries(keys.map(key=>[key,clean(data[key])]));
+  if(settings.headline.length>90 || settings.intro.length>360 || (settings.email && !/^\S+@\S+\.\S+$/.test(settings.email)))return send(res,400,{error:'Check headline, introduction and email'});
+  await pool.query('INSERT INTO studio_settings(id,data) VALUES(1,$1) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data',[settings]);
+  return send(res,200,{ok:true});
+}
+if(path==='/api/admin/uploads' && req.method==='GET')return send(res,200,{apkMB,imageMB:100});
+if(path==='/api/admin/uploads' && req.method==='POST'){
+  const data=await body(req);
+  return send(res,201,await startUpload(pathModule.extname(clean(data.filename).toLowerCase()),data.size));
+}
+if(path.startsWith('/api/admin/uploads/') && req.method==='PUT'){
+  const params=new URL(req.url,'http://localhost').searchParams;
+  return send(res,200,await writePart(req,path.split('/').pop(),Number(params.get('size')),Number(params.get('offset'))));
+}
+if(path==='/api/admin/upload' && req.method==='POST'){
+  const total=Number(req.headers['content-length']);
+  const {id}=await startUpload(pathModule.extname(clean(req.headers['x-filename']).toLowerCase()),total);
+  const result=await writePart(req,id,total,0,total);
+  return send(res,result.url?201:400,result.url?{ok:true,url:result.url}:{error:'Incomplete upload'});
+}
 if(path==='/api/admin/projects'&&req.method==='GET'){const q=await pool.query('SELECT * FROM projects ORDER BY created_at DESC LIMIT 500');return send(res,200,q.rows)}
 if(path==='/api/admin/enquiries'&&req.method==='GET'){const q=await pool.query('SELECT * FROM enquiries ORDER BY created_at DESC LIMIT 500');return send(res,200,q.rows)}
 if(path==='/api/admin/projects'&&req.method==='POST'||/^\/api\/admin\/projects\/\d+$/.test(path)&&['PUT','DELETE'].includes(req.method)){
 const id=Number(path.split('/').pop());if(req.method==='DELETE'){await pool.query('DELETE FROM projects WHERE id=$1',[id]);return send(res,200,{ok:true})}
 const b=await body(req);if(!clean(b.title)||!clean(b.category)||!['Apps','Games','AI','Websites','Software'].includes(b.category)||!['image_url','demo_url','apk_url','video_url'].every(k=>urlOk(clean(b[k]))))return send(res,400,{error:'Title, valid category and HTTPS URLs required'});
-const vals=[clean(b.title).slice(0,150),b.category,clean(b.summary).slice(0,400),clean(b.description).slice(0,10000),clean(b.image_url),clean(b.demo_url),clean(b.apk_url),clean(b.video_url),!!b.featured,b.published!==false];
-if(req.method==='POST'){await pool.query('INSERT INTO projects(title,category,summary,description,image_url,demo_url,apk_url,video_url,featured,published) VALUES('+vals.map((_,i)=>'$'+(i+1)).join(',')+')',vals)}else{await pool.query('UPDATE projects SET title=$1,category=$2,summary=$3,description=$4,image_url=$5,demo_url=$6,apk_url=$7,video_url=$8,featured=$9,published=$10 WHERE id=$11',[...vals,id])}return send(res,200,{ok:true})}
+const vals=[clean(b.title).slice(0,150),b.category,clean(b.summary).slice(0,400),clean(b.description).slice(0,10000),clean(b.image_url),clean(b.demo_url),clean(b.apk_url),clean(b.video_url),!!b.featured,b.published!==false,clean(b.version).slice(0,60)];
+if(req.method==='POST'){await pool.query('INSERT INTO projects(title,category,summary,description,image_url,demo_url,apk_url,video_url,featured,published,version) VALUES('+vals.map((_,i)=>'$'+(i+1)).join(',')+')',vals)}else{await pool.query('UPDATE projects SET title=$1,category=$2,summary=$3,description=$4,image_url=$5,demo_url=$6,apk_url=$7,video_url=$8,featured=$9,published=$10,version=$11 WHERE id=$12',[...vals,id])}return send(res,200,{ok:true})}
 if(/^\/api\/admin\/enquiries\/\d+$/.test(path)&&req.method==='PATCH'){const b=await body(req);if(!['new','contacted','closed'].includes(b.status))return send(res,400,{error:'Invalid status'});await pool.query('UPDATE enquiries SET status=$1 WHERE id=$2',[b.status,Number(path.split('/').pop())]);return send(res,200,{ok:true})}
 return send(res,404,{error:'Not found'});
-}catch(e){console.error(e);send(res,e.message==='Request too large'?413:500,{error:e.message==='Request too large'?e.message:'Server error'})}}).listen(port,'0.0.0.0',()=>console.log('ZUTECHSAM '+(admin?'admin':'public')+' listening '+port));
+}catch(e){console.error(e);send(res,e.status || (e.message==='Request too large'?413:500),{error:e.status || e.message==='Request too large'?e.message:'Server error'})}}).listen(port,'0.0.0.0',()=>console.log('ZUTECHSAM '+(admin?'admin':'public')+' listening '+port));
