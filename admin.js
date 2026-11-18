@@ -2,6 +2,7 @@ const $ = id => document.getElementById(id);
 const form = $('projectForm');
 let token = sessionStorage.getItem('zutechsam_admin_token') || '';
 let projects = [], enquiries = [], editing = null, uploading = false;
+let attached=[];const failedSelections=new Set();
 let limits = {apkMB:1024,imageMB:100};
 const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function signedIn(on){
@@ -26,12 +27,12 @@ function navigate(){
 }
 window.onhashchange=navigate;
 function clearEditor(){
-  editing=null;form.reset();$('editorTitle').textContent='Add project';$('projectMsg').textContent='';
+  editing=null;form.reset();attached=[];failedSelections.clear();showFiles();$('editorTitle').textContent='Add project';$('projectMsg').textContent='';
   $('progress').hidden=true;$('uploadStatus').textContent='';
 }
 const coverFor=p=>p.image_url||({Games:'/Games.webp',AI:'/AI.webp',Websites:'/Websites.webp',Software:'/Websites.webp'}[p.category]||'/studio.webp');
 function projectRow(p){
-  return '<div class="row project-row"><img alt="" class="thumb" src="'+esc(coverFor(p))+'"><div><strong>'+esc(p.title)+'</strong><div class="small">'+esc(p.category)+' · '+(p.published?'Published':'Draft')+(p.featured?' · Featured':'')+'</div></div><div><button class="alt" data-edit="'+p.id+'">Edit</button><button class="alt" data-copy="'+p.id+'">Duplicate</button><button class="danger" data-remove="'+p.id+'">Delete</button></div></div>';
+  return '<div class="row project-row"><img alt="" class="thumb" src="'+esc(coverFor(p))+'"><div><strong>'+esc(p.title)+'</strong><div class="small">'+esc(p.category)+' · '+(p.published?'Published':'Draft')+(p.featured?' · Featured':'')+' · '+((p.attachments||[]).length+(p.apk_url?1:0))+' files</div></div><div><button class="alt" data-edit="'+p.id+'">Edit</button><button class="alt" data-copy="'+p.id+'">Duplicate</button><button class="danger" data-remove="'+p.id+'">Delete</button></div></div>';
 }
 function render(){
   renderWeek();
@@ -65,6 +66,7 @@ async function projectAction(event){
     clearEditor();editing=edit||null;
     for(const key of ['title','category','version','summary','description','release_notes','image_url','demo_url','apk_url','video_url']) form.elements[key].value=project[key]||'';
     for(const key of ['featured','published']) form.elements[key].checked=project[key];
+    attached=(project.attachments||[]).map(f=>({...f}));showFiles();
     form.elements.screenshots.value=(project.screenshots||[]).join('\n');
     if(copy){form.elements.title.value=(project.title+' (copy)').slice(0,150);form.elements.published.checked=false;form.elements.featured.checked=false;}
     $('editorTitle').textContent=copy?'Duplicate as draft':'Edit project';location.hash='editor';
@@ -81,7 +83,8 @@ $('inbox').onchange=async({target})=>{
 };
 form.onsubmit=async event=>{
   event.preventDefault();if(uploading)return;
-  const data=Object.fromEntries(new FormData(form));
+  if([...failedSelections].some(input=>input.files.length)){$('projectMsg').textContent='Retry the failed upload or clear its file selection before saving.';return;}
+  const data=Object.fromEntries(new FormData(form));data.attachments=attached;
   data.screenshots=screenshotUrls();
   for(const key of ['featured','published'])data[key]=form.elements[key].checked;
   const submit=form.querySelector('button:not([type])');submit.disabled=true;
@@ -92,12 +95,32 @@ form.onsubmit=async event=>{
 $('settingsForm').onsubmit=async event=>{
   event.preventDefault();try{await api('/api/admin/studio','PUT',Object.fromEntries(new FormData(event.target)));$('notice').textContent='Website settings saved.';}catch(error){$('notice').textContent=error.message;}
 };
-for(const button of form.querySelectorAll('[data-upload]'))button.onclick=async()=>{
+function showFiles(){
+  $('attachedFiles').innerHTML=attached.map((f,i)=>'<div class="row"><span>'+esc(f.name)+(f.size?' · '+(f.size/1048576).toFixed(1)+' MiB':' · Link')+'</span><button type="button" class="alt" data-detach="'+i+'">Remove</button></div>').join('');
+}
+$('attachedFiles').onclick=e=>{if(e.target.dataset.detach!==undefined){attached.splice(Number(e.target.dataset.detach),1);showFiles();}};
+$('addLink').onclick=()=>{
+  const name=$('linkName').value.trim(),url=$('linkUrl').value.trim();
+  if(!name||!/^https:\/\//i.test(url)||!$('linkUrl').validity.valid||url.length>=1500||attached.length>=12){$('uploadStatus').textContent='Enter a label and valid HTTPS URL (up to 12 files).';return;}
+  attached.push({name,url,size:0});showFiles();$('linkName').value=$('linkUrl').value='';$('uploadStatus').textContent='Link attached. Save the project.';
+};
+for(const button of form.querySelectorAll('[data-upload]')){
+const picker=$(button.dataset.upload);
+const discard=document.createElement('button');discard.type='button';discard.className='alt';discard.textContent='Clear selection';discard.hidden=true;button.after(discard);
+discard.onclick=()=>{picker.value='';failedSelections.delete(picker);discard.hidden=true;$('uploadStatus').textContent='File selection cleared.';};
+picker.onchange=()=>{if(picker.files.length)button.click();else failedSelections.delete(picker);};
+button.onclick=async()=>{
   if(uploading)return;
   const file=$(button.dataset.upload).files[0],status=$('uploadStatus');
   if(!file){status.textContent='Choose a file first.';return;}
+  discard.hidden=false;failedSelections.add(picker);
   if(button.dataset.target==='screenshots' && screenshotUrls().length>=6){status.textContent='The gallery already contains six images.';return;}
-  const max=button.dataset.target==='apk_url'?limits.apkMB:limits.imageMB;
+  const field=button.dataset.target;
+  const ext=file.name.split('.').pop().toLowerCase();
+  const allowed=field==='attachments'?['zip','aab','pdf']:field==='apk_url'?['apk']:['png','jpg','jpeg','webp'];
+  if(!allowed.includes(ext)){status.textContent='Choose a '+allowed.join(', ')+' file for this field.';return;}
+  if(field==='attachments'&&attached.length>=12){status.textContent='Remove a file before adding another.';return;}
+  const max=['apk_url','attachments'].includes(field)?limits.apkMB:limits.imageMB;
   if(file.size>max*1024**2){status.textContent='Maximum size is '+max+' MB.';return;}
   uploading=true;
   form.querySelectorAll('button,input[type=file]').forEach(el=>el.disabled=true);
@@ -114,12 +137,14 @@ for(const button of form.querySelectorAll('[data-upload]'))button.onclick=async(
       }
       if(result.offset<=offset)throw Error('Upload interrupted. Please retry.');
       offset=result.offset;$('progress').value=Math.round(offset/file.size*100);status.textContent='Uploading '+file.name+' · '+$('progress').value+'%';
-      if(result.url){const url=new URL(result.url,location.origin).href;form.elements[button.dataset.target].value=button.dataset.target==='screenshots'?[...screenshotUrls(),url].join('\n'):url;}
+      if(result.url){const url=new URL(result.url,location.origin).href;if(field==='attachments'){attached.push({name:file.name.slice(0,240),size:file.size,url});showFiles();}else form.elements[field].value=field==='screenshots'?[...screenshotUrls(),url].join('\n'):url;}
     }
+    picker.value='';discard.hidden=true;failedSelections.delete(picker);
     status.textContent='Upload complete. Save the project to attach this file.';
   }catch(error){status.textContent=error.message;}
   finally{uploading=false;form.querySelectorAll('button,input[type=file]').forEach(el=>el.disabled=false);}
 };
+}
 navigate();
 if(token)load().catch(error=>{$('loginMsg').textContent=error.message;});
 
