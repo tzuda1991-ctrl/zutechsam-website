@@ -29,10 +29,12 @@ function clearEditor(){
   editing=null;form.reset();$('editorTitle').textContent='Add project';$('projectMsg').textContent='';
   $('progress').hidden=true;$('uploadStatus').textContent='';
 }
+const coverFor=p=>p.image_url||({Games:'/Games.webp',AI:'/AI.webp',Websites:'/Websites.webp',Software:'/Websites.webp'}[p.category]||'/studio.webp');
 function projectRow(p){
-  return '<div class="row"><div><strong>'+esc(p.title)+'</strong><div class="small">'+esc(p.category)+' · '+(p.published?'Published':'Draft')+(p.featured?' · Featured':'')+'</div></div><div><button class="alt" data-edit="'+p.id+'">Edit</button><button class="danger" data-remove="'+p.id+'">Delete</button></div></div>';
+  return '<div class="row project-row"><img alt="" class="thumb" src="'+esc(coverFor(p))+'"><div><strong>'+esc(p.title)+'</strong><div class="small">'+esc(p.category)+' · '+(p.published?'Published':'Draft')+(p.featured?' · Featured':'')+'</div></div><div><button class="alt" data-edit="'+p.id+'">Edit</button><button class="alt" data-copy="'+p.id+'">Duplicate</button><button class="danger" data-remove="'+p.id+'">Delete</button></div></div>';
 }
 function render(){
+  renderWeek();
   const metrics=[['Total projects',projects.length],['Published',projects.filter(p=>p.published).length],['Drafts',projects.filter(p=>!p.published).length],['New enquiries',enquiries.filter(e=>e.status==='new').length]];
   $('metrics').innerHTML=metrics.map(([title,n])=>'<div class="metric"><strong>'+n+'</strong>'+title+'</div>').join('');
   $('recent').innerHTML=projects.slice(0,4).map(projectRow).join('')||'<p>No projects yet.</p>';
@@ -56,14 +58,16 @@ $('newProject').onclick=()=>{if(!uploading) clearEditor();};
 $('cancel').onclick=()=>{clearEditor();location.hash='projects';};
 for(const id of ['search','findMail','mailStatus','pub']) $(id).oninput=render;
 async function projectAction(event){
-  const {edit,remove}=event.target.dataset;
-  if(uploading||(!edit&&!remove)) return;
-  const project=projects.find(p=>String(p.id)===(edit||remove));
-  if(edit){
-    clearEditor();editing=edit;
-    for(const key of ['title','category','version','summary','description','image_url','demo_url','apk_url','video_url']) form.elements[key].value=project[key]||'';
+  const {edit,remove,copy}=event.target.dataset;
+  if(uploading||(!edit&&!remove&&!copy)) return;
+  const project=projects.find(p=>String(p.id)===(edit||remove||copy));
+  if(edit||copy){
+    clearEditor();editing=edit||null;
+    for(const key of ['title','category','version','summary','description','release_notes','image_url','demo_url','apk_url','video_url']) form.elements[key].value=project[key]||'';
     for(const key of ['featured','published']) form.elements[key].checked=project[key];
-    $('editorTitle').textContent='Edit project';location.hash='editor';
+    form.elements.screenshots.value=(project.screenshots||[]).join('\n');
+    if(copy){form.elements.title.value=(project.title+' (copy)').slice(0,150);form.elements.published.checked=false;form.elements.featured.checked=false;}
+    $('editorTitle').textContent=copy?'Duplicate as draft':'Edit project';location.hash='editor';
   }else if(confirm('Delete '+project.title+'?')){
     try{await api('/api/admin/projects/'+remove,'DELETE');await load();$('notice').textContent='Project deleted.';}catch(error){$('notice').textContent=error.message;}
   }
@@ -78,6 +82,7 @@ $('inbox').onchange=async({target})=>{
 form.onsubmit=async event=>{
   event.preventDefault();if(uploading)return;
   const data=Object.fromEntries(new FormData(form));
+  data.screenshots=screenshotUrls();
   for(const key of ['featured','published'])data[key]=form.elements[key].checked;
   const submit=form.querySelector('button:not([type])');submit.disabled=true;
   try{await api('/api/admin/projects'+(editing?'/'+editing:''),editing?'PUT':'POST',data);clearEditor();location.hash='projects';$('notice').textContent='Project saved.';await load();}
@@ -91,6 +96,7 @@ for(const button of form.querySelectorAll('[data-upload]'))button.onclick=async(
   if(uploading)return;
   const file=$(button.dataset.upload).files[0],status=$('uploadStatus');
   if(!file){status.textContent='Choose a file first.';return;}
+  if(button.dataset.target==='screenshots' && screenshotUrls().length>=6){status.textContent='The gallery already contains six images.';return;}
   const max=button.dataset.target==='apk_url'?limits.apkMB:limits.imageMB;
   if(file.size>max*1024**2){status.textContent='Maximum size is '+max+' MB.';return;}
   uploading=true;
@@ -108,7 +114,7 @@ for(const button of form.querySelectorAll('[data-upload]'))button.onclick=async(
       }
       if(result.offset<=offset)throw Error('Upload interrupted. Please retry.');
       offset=result.offset;$('progress').value=Math.round(offset/file.size*100);status.textContent='Uploading '+file.name+' · '+$('progress').value+'%';
-      if(result.url)form.elements[button.dataset.target].value=new URL(result.url,location.origin).href;
+      if(result.url){const url=new URL(result.url,location.origin).href;form.elements[button.dataset.target].value=button.dataset.target==='screenshots'?[...screenshotUrls(),url].join('\n'):url;}
     }
     status.textContent='Upload complete. Save the project to attach this file.';
   }catch(error){status.textContent=error.message;}
@@ -116,3 +122,19 @@ for(const button of form.querySelectorAll('[data-upload]'))button.onclick=async(
 };
 navigate();
 if(token)load().catch(error=>{$('loginMsg').textContent=error.message;});
+
+function screenshotUrls(){return form.elements.screenshots.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);}
+function renderWeek(){
+  const days=Array.from({length:7},(_,i)=>{const day=new Date();day.setDate(day.getDate()-6+i);return {day,count:0};});
+  for(const enquiry of enquiries){const item=days.find(d=>d.day.toDateString()===new Date(enquiry.created_at).toDateString());if(item)item.count++;}
+  const max=Math.max(1,...days.map(d=>d.count));
+  $('week').innerHTML=days.map(d=>'<div><b>'+d.count+'</b><i style="height:'+Math.round(d.count/max*48+2)+'px"></i><small>'+d.day.toLocaleDateString(undefined,{weekday:'short'})+'</small></div>').join('');
+}
+$('quickNew').onclick=()=>{if(!uploading)clearEditor();};
+$('previewRelease').onclick=()=>{
+  const fields=form.elements;
+  const cover=/^https:\/\//i.test(fields.image_url.value)?fields.image_url.value:coverFor({category:fields.category.value});
+  $('releasePreview').innerHTML='<img class="previewHero" alt="" src="'+esc(cover)+'"><small>'+esc(fields.category.value)+' · '+esc(fields.version.value)+'</small><h2>'+esc(fields.title.value||'Untitled project')+'</h2><p>'+esc(fields.description.value||fields.summary.value)+'</p>'+screenshotUrls().filter(url=>/^https:\/\//i.test(url)).map(url=>'<img class="previewThumb" alt="Gallery preview" src="'+esc(url)+'">').join('')+(fields.release_notes.value?'<h3>Release notes</h3><p>'+esc(fields.release_notes.value)+'</p>':'');
+  $('releaseDialog').showModal();
+};
+$('closePreview').onclick=()=>$('releaseDialog').close();
