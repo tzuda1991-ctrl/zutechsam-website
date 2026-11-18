@@ -76,3 +76,29 @@ export async function cleanStaging() {
     if (info && Date.now()-info.mtimeMs > 86400000) await rm(file,{force:true});
   }
 }
+
+export async function storageSpace() {
+  await mkdir(directory,{recursive:true});
+  const fs=await statfs(directory);
+  return {free:fs.bavail*fs.bsize,total:fs.blocks*fs.bsize};
+}
+
+export async function uploadPosition(id,total) {
+  if(!mediaId.test(id)||!Number.isSafeInteger(total)||total<=0)throw fail(400,'Invalid upload');
+  const finished=await stat(path.join(directory,id)).catch(()=>null);
+  if(finished?.size===total)return {offset:total,url:'/media/'+id};
+  const partial=await stat(path.join(pending,id+'-'+total)).catch(()=>null);
+  if(!partial)throw fail(404,'Upload expired');
+  return {offset:partial.size};
+}
+
+export async function storedFiles() {
+  const space=await storageSpace();
+  const files=[];
+  for(const name of await readdir(directory)){
+    if(!mediaId.test(name))continue;
+    const info=await stat(path.join(directory,name));
+    files.push({name,size:info.size,modified:info.mtime});
+  }
+  return {...space,files:files.sort((a,b)=>b.modified-a.modified)};
+}
