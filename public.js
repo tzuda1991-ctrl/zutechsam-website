@@ -41,8 +41,11 @@ fetch('/api/projects').then(r=>{if(!r.ok)throw Error();return r.json();}).then(r
     $('spotTitle').textContent=lead.title;
     $('spotLink').href=page;
     $('spotLabel').textContent=lead.apk_url?'Android release'+(lead.version?' · v'+String(lead.version).replace(/^v/i,''):''):'Featured project';
-    $('spotAction').href=page+(lead.apk_url?'#downloads':'');
-    $('spotAction').firstChild.textContent=lead.apk_url?'View download ':'View project ';
+    $('spotImage').src=image(lead);
+    $('spotAction').href=lead.apk_url?(lead.latest_release_id?page+'/releases/'+lead.latest_release_id+'/download':lead.apk_url):page;
+    $('spotButton').textContent=lead.apk_url?'Download APK':'Open project';
+    $('spotIcon').setAttribute('href',lead.apk_url?'/icons.svg#download':'/icons.svg#arrow');
+    $('spotLink').hidden=!lead.apk_url;
     $('spotlight').hidden=false;
   }
 }).catch(()=>{$('projectGrid').textContent='The project collection could not load. Refresh to try again.';});
