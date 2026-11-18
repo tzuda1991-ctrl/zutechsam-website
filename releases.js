@@ -1,3 +1,4 @@
+import {snapshot} from './release-center.js';
 import {projectPage} from './project-page.js';
 import {deleteStoredFile,storedFiles,storageSpace,uploadPosition} from './uploads.js';
 
@@ -18,12 +19,12 @@ async function history(db,id){
 }
 export async function releaseView(db,project,preview){
   const releases=await history(db,project.id);
-  if(preview)releases.unshift({...preview,is_latest:true,published_at:new Date()});
-  const current=releases[0];
-  if(!current)return projectPage(project);
+  if(preview)releases.unshift({...preview,is_latest:preview.channel!=='Beta',published_at:new Date()});
+  const current=preview||releases.find(r=>r.is_latest);
+  if(!releases.length)return projectPage(project);
   if(project.apk_url&&!releases.some(r=>r.url===project.apk_url))releases.push({version:project.version||'Original release',url:project.apk_url,notes:project.release_notes});
   const links=releases.map(r=>({...r,download:!preview&&r.id?'/projects/'+project.id+'/releases/'+r.id+'/download':r.url}));
-  return projectPage({...project,version:current.version,apk_url:links[0].download,release_notes:current.notes},links);
+  return projectPage({...project,version:current?.version||project.version,apk_url:current?links[0].download:project.apk_url,release_notes:current?.notes||project.release_notes},links);
 }
 async function fileReferences(db){
     const projects=(await db.query('SELECT id,title,apk_url,image_url,screenshots,attachments FROM projects')).rows;
@@ -71,6 +72,7 @@ export async function releaseApi(path,req,res,{pool,body,send}){
     await client.query('BEGIN');
     const project=(await client.query('SELECT * FROM projects WHERE id=$1 FOR UPDATE',[id])).rows[0];
     if(!project)throw bad(404,'Project no longer exists');
+    const before=action==='preview'?null:await snapshot(client,id);
     let chosen,preview;
     if(changing){
       const current=(await client.query('SELECT * FROM project_releases WHERE project_id=$1 AND id=$2',[id,action])).rows[0];
@@ -79,10 +81,12 @@ export async function releaseApi(path,req,res,{pool,body,send}){
       if(data.revision!==current.revision)throw bad(409,'This release changed. Reopen it to see the current version.');
       if(req.method==='DELETE'){
         await client.query('DELETE FROM project_releases WHERE project_id=$1 AND id=$2',[id,action]);
-        if(current.is_latest)chosen=(await client.query('SELECT id FROM project_releases WHERE project_id=$1 ORDER BY published_at DESC,id DESC LIMIT 1',[id])).rows[0];
+        if(current.is_latest)chosen=(await client.query(`SELECT id FROM project_releases WHERE project_id=$1 AND channel='Stable' ORDER BY published_at DESC,id DESC LIMIT 1`,[id])).rows[0];
       }else{
         const version=String(data.version||'').trim(), notes=String(data.notes||'').trim();
         if(!version||version.length>60||notes.length>4000)throw bad(400,'Enter a version and valid release notes.');
+        const channel=data.channel??current.channel;
+        if(!['Stable','Beta'].includes(channel))throw bad(400,'Choose a release channel.');
         let {url,size,filename}=current;
         if(data.url!==current.url){
           let next;try{next=new URL(data.url);}catch{throw bad(400,'Choose a valid APK');}
@@ -91,7 +95,8 @@ export async function releaseApi(path,req,res,{pool,body,send}){
           if(!(await uploadPosition(key,data.size)).url)throw bad(400,'Finish uploading the replacement first');
           url=next.href;size=data.size;filename=data.filename;
         }
-        await client.query('UPDATE project_releases SET version=$1,notes=$2,url=$3,size=$4,filename=$5,revision=revision+1 WHERE project_id=$6 AND id=$7',[version,notes,url,size,filename,id,action]);
+        await client.query(`UPDATE project_releases SET version=$1,notes=$2,url=$3,size=$4,filename=$5,channel=$8,details=CASE WHEN url=$3 THEN details END,is_latest=is_latest AND $8='Stable',revision=revision+1 WHERE project_id=$6 AND id=$7`,[version,notes,url,size,filename,id,action,channel]);
+        if(current.is_latest&&channel==='Beta')chosen=(await client.query("SELECT id FROM project_releases WHERE project_id=$1 AND channel='Stable' ORDER BY published_at DESC,id DESC LIMIT 1",[id])).rows[0];
       }
     }else if(action&&action!=='preview'){
       chosen=(await client.query('SELECT id FROM project_releases WHERE project_id=$1 AND id=$2',[id,action])).rows[0];
@@ -104,17 +109,23 @@ export async function releaseApi(path,req,res,{pool,body,send}){
       if(!key||url.protocol!=='https:'||url.host!==req.headers.host||!version||version.length>60||notes.length>4000||!filename||filename.length>240)throw bad(400,'Check the version, notes and APK file');
       const state=await uploadPosition(key,data.size);
       if(!state.url)throw bad(400,'Finish uploading the APK first');
-      const release={version,url:url.href,size:data.size,notes,filename};
+      const channel=data.channel||'Stable';
+      if(!['Stable','Beta'].includes(channel))throw bad(400,'Choose a release channel.');
+      const release={version,url:url.href,size:data.size,notes,filename,channel};
       if(action==='preview')preview=await releaseView(client,project,release);
       else{
         const existing=(await client.query('SELECT * FROM project_releases WHERE project_id=$1 AND version=$2',[id,version])).rows[0];
         if(existing){if(existing.url!==url.href||existing.notes!==notes)throw bad(409,'That version already exists. Choose another version.');}
-        else chosen=(await client.query('INSERT INTO project_releases(project_id,version,url,filename,size,notes) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[id,version,url.href,filename,data.size,notes])).rows[0];
+        else chosen=(await client.query('INSERT INTO project_releases(project_id,version,url,filename,size,notes,channel) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,channel',[id,version,url.href,filename,data.size,notes,channel])).rows[0];
       }
     }
-    if(chosen){
+    if(chosen&&chosen.channel!=='Beta'){
       await client.query('UPDATE project_releases SET is_latest=false WHERE project_id=$1 AND is_latest',[id]);
-      await client.query('UPDATE project_releases SET is_latest=true WHERE id=$1',[chosen.id]);
+      await client.query(`UPDATE project_releases SET is_latest=true,channel='Stable',revision=revision+1 WHERE id=$1`,[chosen.id]);
+    }
+    if(before){
+      const after=await snapshot(client,id);
+      if(JSON.stringify(before)!==JSON.stringify(after))await client.query('INSERT INTO release_activity(project_id,action,before_state,after_state) VALUES($1,$2,$3,$4)',[id,req.method==='DELETE'?'Deleted '+before.find(r=>r.id===action)?.version:changing?'Edited '+after.find(r=>r.id===action)?.version:action?'Promoted '+after.find(r=>r.id===action)?.version:'Published '+after.find(r=>!before.some(b=>b.id===r.id))?.version,JSON.stringify(before),JSON.stringify(after)]);
     }
     await client.query('COMMIT');
     send(res,200,preview?{html:preview}:{ok:true,published:project.published});
